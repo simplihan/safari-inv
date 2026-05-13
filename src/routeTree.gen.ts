@@ -14,6 +14,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppStaffRouteImport } from './routes/app.staff'
+import { Route as AppProfileRouteImport } from './routes/app.profile'
 import { Route as AppPendingRouteImport } from './routes/app.pending'
 import { Route as AppMonitoringRouteImport } from './routes/app.monitoring'
 import { Route as AppDashboardRouteImport } from './routes/app.dashboard'
@@ -43,6 +44,11 @@ const AppStaffRoute = AppStaffRouteImport.update({
   path: '/staff',
   getParentRoute: () => AppRoute,
 } as any)
+const AppProfileRoute = AppProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppPendingRoute = AppPendingRouteImport.update({
   id: '/pending',
   path: '/pending',
@@ -67,6 +73,7 @@ export interface FileRoutesByFullPath {
   '/app/dashboard': typeof AppDashboardRoute
   '/app/monitoring': typeof AppMonitoringRoute
   '/app/pending': typeof AppPendingRoute
+  '/app/profile': typeof AppProfileRoute
   '/app/staff': typeof AppStaffRoute
 }
 export interface FileRoutesByTo {
@@ -77,6 +84,7 @@ export interface FileRoutesByTo {
   '/app/dashboard': typeof AppDashboardRoute
   '/app/monitoring': typeof AppMonitoringRoute
   '/app/pending': typeof AppPendingRoute
+  '/app/profile': typeof AppProfileRoute
   '/app/staff': typeof AppStaffRoute
 }
 export interface FileRoutesById {
@@ -88,6 +96,7 @@ export interface FileRoutesById {
   '/app/dashboard': typeof AppDashboardRoute
   '/app/monitoring': typeof AppMonitoringRoute
   '/app/pending': typeof AppPendingRoute
+  '/app/profile': typeof AppProfileRoute
   '/app/staff': typeof AppStaffRoute
 }
 export interface FileRouteTypes {
@@ -100,6 +109,7 @@ export interface FileRouteTypes {
     | '/app/dashboard'
     | '/app/monitoring'
     | '/app/pending'
+    | '/app/profile'
     | '/app/staff'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -110,6 +120,7 @@ export interface FileRouteTypes {
     | '/app/dashboard'
     | '/app/monitoring'
     | '/app/pending'
+    | '/app/profile'
     | '/app/staff'
   id:
     | '__root__'
@@ -120,6 +131,7 @@ export interface FileRouteTypes {
     | '/app/dashboard'
     | '/app/monitoring'
     | '/app/pending'
+    | '/app/profile'
     | '/app/staff'
   fileRoutesById: FileRoutesById
 }
@@ -167,6 +179,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppStaffRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/profile': {
+      id: '/app/profile'
+      path: '/profile'
+      fullPath: '/app/profile'
+      preLoaderRoute: typeof AppProfileRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/pending': {
       id: '/app/pending'
       path: '/pending'
@@ -195,6 +214,7 @@ interface AppRouteChildren {
   AppDashboardRoute: typeof AppDashboardRoute
   AppMonitoringRoute: typeof AppMonitoringRoute
   AppPendingRoute: typeof AppPendingRoute
+  AppProfileRoute: typeof AppProfileRoute
   AppStaffRoute: typeof AppStaffRoute
 }
 
@@ -202,6 +222,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppDashboardRoute: AppDashboardRoute,
   AppMonitoringRoute: AppMonitoringRoute,
   AppPendingRoute: AppPendingRoute,
+  AppProfileRoute: AppProfileRoute,
   AppStaffRoute: AppStaffRoute,
 }
 
