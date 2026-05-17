@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
@@ -13,7 +13,8 @@ import { PieChart as PieIcon } from "lucide-react";
 
 export const Route = createFileRoute("/app/common")({ component: Common });
 
-const DUTY_MIN = 10 * 60; // 10 hours
+const DUTY_MIN_PER_DAY = 10 * 60; // 10 hours
+type Period = "day" | "week" | "month";
 
 type Row = {
   id: string;
@@ -24,12 +25,15 @@ type Row = {
   in_time: string | null;
   duration_minutes: number | null;
   status: string;
-  profile?: { full_name: string; department: string | null };
+  profile?: { full_name: string; department: string | null; profile_image: string | null };
 };
 
 function Common() {
   const { user, profile, canManage } = useAuth();
   const [rows, setRows] = useState<Row[]>([]);
+  const [chartRows, setChartRows] = useState<Row[]>([]);
+  const [period, setPeriod] = useState<Period>("day");
+  const [chartDuty, setChartDuty] = useState<number>(DUTY_MIN_PER_DAY);
   const [showChart, setShowChart] = useState(false);
   const [pieUserId, setPieUserId] = useState<string>("");
   const [tick, setTick] = useState(0);
@@ -49,38 +53,56 @@ function Common() {
       .order("out_time", { ascending: false });
     const ids = Array.from(new Set((logs ?? []).map((l: any) => l.user_id)));
     const { data: profs } = ids.length
-      ? await supabase.from("profiles").select("id, full_name, department").in("id", ids)
+      ? await supabase.from("profiles").select("id, full_name, department, profile_image").in("id", ids)
       : { data: [] as any[] };
     const pmap = new Map((profs ?? []).map((p: any) => [p.id, p]));
     setRows(((logs ?? []) as Row[]).map((l) => ({ ...l, profile: pmap.get(l.user_id) })));
   };
 
+  // Load chart data scoped to the selected period (day/week/month)
+  const loadChart = async () => {
+    const now = new Date();
+    const start = new Date(now);
+    let days = 1;
+    if (period === "day") { start.setHours(0, 0, 0, 0); days = 1; }
+    else if (period === "week") { start.setDate(now.getDate() - 6); start.setHours(0, 0, 0, 0); days = 7; }
+    else { start.setDate(now.getDate() - 29); start.setHours(0, 0, 0, 0); days = 30; }
+    setChartDuty(DUTY_MIN_PER_DAY * days);
+    const { data: logs } = await supabase
+      .from("break_logs").select("*")
+      .gte("out_time", start.toISOString())
+      .order("out_time", { ascending: false });
+    setChartRows((logs ?? []) as Row[]);
+  };
+  useEffect(() => { loadChart(); }, [period]);
+
   useEffect(() => {
     load();
     const ch = supabase
       .channel("common-feed")
-      .on("postgres_changes", { event: "*", schema: "public", table: "break_logs" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "break_logs" }, () => { load(); loadChart(); })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // people visible to me today (RLS already restricts to my dept unless I'm admin/manager)
+  // people visible to me (combine activity feed + chart data so the selector covers the whole period)
   const people = useMemo(() => {
-    const map = new Map<string, { id: string; name: string; dept: string | null }>();
-    rows.forEach((r) => {
+    const map = new Map<string, { id: string; name: string; dept: string | null; img: string | null }>();
+    [...rows, ...chartRows].forEach((r) => {
       if (!map.has(r.user_id)) {
         map.set(r.user_id, {
           id: r.user_id,
           name: r.profile?.full_name ?? "Unknown",
           dept: r.profile?.department ?? null,
+          img: r.profile?.profile_image ?? null,
         });
       }
     });
     if (user && profile && !map.has(user.id)) {
-      map.set(user.id, { id: user.id, name: profile.full_name, dept: profile.department });
+      map.set(user.id, { id: user.id, name: profile.full_name, dept: profile.department, img: profile.profile_image });
     }
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [rows, user?.id, profile?.full_name, profile?.department]);
+  }, [rows, chartRows, user?.id, profile?.full_name, profile?.department, profile?.profile_image]);
 
   useEffect(() => {
     if (!pieUserId && user?.id) setPieUserId(user.id);
@@ -88,7 +110,7 @@ function Common() {
 
   const breakMinFor = (uid: string) => {
     let m = 0;
-    rows.filter((r) => r.user_id === uid).forEach((r) => {
+    chartRows.filter((r) => r.user_id === uid).forEach((r) => {
       if (r.duration_minutes != null) m += r.duration_minutes;
       else if (r.status === "out")
         m += Math.max(0, Math.round((Date.now() - new Date(r.out_time).getTime()) / 60000));
@@ -99,17 +121,17 @@ function Common() {
   const selectedBreakMin = useMemo(
     () => (pieUserId ? breakMinFor(pieUserId) : 0),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pieUserId, rows, tick]
+    [pieUserId, chartRows, tick]
   );
   const selectedName =
     people.find((p) => p.id === pieUserId)?.name ?? profile?.full_name ?? "—";
-  const workingMin = Math.max(0, DUTY_MIN - selectedBreakMin);
-  const overMin = selectedBreakMin > DUTY_MIN ? selectedBreakMin - DUTY_MIN : 0;
+  const workingMin = Math.max(0, chartDuty - selectedBreakMin);
+  const overMin = selectedBreakMin > chartDuty ? selectedBreakMin - chartDuty : 0;
 
   const pieData = [
     { name: "Working time", value: workingMin },
-    { name: "Break / Outside", value: Math.min(selectedBreakMin, DUTY_MIN) },
-    ...(overMin > 0 ? [{ name: "Over 10h", value: overMin }] : []),
+    { name: "Break / Outside", value: Math.min(selectedBreakMin, chartDuty) },
+    ...(overMin > 0 ? [{ name: "Over quota", value: overMin }] : []),
   ].filter((d) => d.value > 0);
 
   const COLORS = ["#6366f1", "#f59e0b", "#ef4444"];
@@ -126,7 +148,7 @@ function Common() {
           </p>
         </div>
         <Button onClick={() => setShowChart((s) => !s)} className="gradient-primary text-primary-foreground border-0">
-          <PieIcon className="h-4 w-4 mr-2" /> {showChart ? "Hide" : "Show"} 10h breakdown
+          <PieIcon className="h-4 w-4 mr-2" /> {showChart ? "Hide" : "Show"} breakdown
         </Button>
       </div>
 
@@ -135,18 +157,31 @@ function Common() {
           <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <CardTitle>
               {selectedName} — {fmtDuration(selectedBreakMin)} on breaks · {fmtDuration(workingMin)} working
+              <span className="ml-2 text-xs text-muted-foreground font-normal">
+                ({period === "day" ? "today" : period === "week" ? "last 7 days" : "last 30 days"})
+              </span>
             </CardTitle>
-            <div className="w-full md:w-64">
-              <Select value={pieUserId} onValueChange={setPieUserId}>
-                <SelectTrigger><SelectValue placeholder="Pick a person" /></SelectTrigger>
+            <div className="flex gap-2 w-full md:w-auto">
+              <Select value={period} onValueChange={(v: Period) => setPeriod(v)}>
+                <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {people.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}{p.dept ? ` · ${p.dept}` : ""}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="day">Daily</SelectItem>
+                  <SelectItem value="week">Weekly</SelectItem>
+                  <SelectItem value="month">Monthly</SelectItem>
                 </SelectContent>
               </Select>
+              <div className="flex-1 md:w-64">
+                <Select value={pieUserId} onValueChange={setPieUserId}>
+                  <SelectTrigger><SelectValue placeholder="Pick a person" /></SelectTrigger>
+                  <SelectContent>
+                    {people.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}{p.dept ? ` · ${p.dept}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -175,6 +210,7 @@ function Common() {
               {rows.map((r) => (
                 <li key={r.id} className="py-3 flex items-center gap-3">
                   <Avatar className="h-9 w-9">
+                    <AvatarImage src={r.profile?.profile_image ?? undefined} />
                     <AvatarFallback className="gradient-primary text-primary-foreground text-xs">
                       {(r.profile?.full_name ?? "?").split(" ").map((n) => n[0]).slice(0, 2).join("")}
                     </AvatarFallback>
