@@ -10,8 +10,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Search, Pencil } from "lucide-react";
+import { Search, Pencil, UserPlus, KeyRound } from "lucide-react";
 import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
+import { adminCreateUser, adminResetPassword } from "@/lib/users.functions";
+import { DEPARTMENTS } from "@/lib/departments";
 
 export const Route = createFileRoute("/app/staff")({ component: Staff });
 
@@ -20,6 +23,7 @@ function Staff() {
   const [rows, setRows] = useState<any[]>([]);
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<any | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const load = async () => {
     const { data: profiles } = await supabase.from("profiles").select("*").order("full_name");
@@ -46,9 +50,16 @@ function Staff() {
           <h1 className="text-3xl font-bold tracking-tight">Staff management</h1>
           <p className="text-muted-foreground mt-1">{rows.length} total members</p>
         </div>
-        <div className="relative md:w-80">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search..." className="pl-9" />
+        <div className="flex gap-2 md:w-auto w-full">
+          <div className="relative flex-1 md:w-80">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search..." className="pl-9" />
+          </div>
+          {isAdmin && (
+            <Button onClick={() => setCreating(true)} className="gradient-primary text-primary-foreground border-0">
+              <UserPlus className="h-4 w-4 mr-2" /> Add user
+            </Button>
+          )}
         </div>
       </div>
       <div className="grid gap-3">
@@ -81,38 +92,69 @@ function Staff() {
           </Card>
         ))}
       </div>
-      <EditDialog user={editing} onClose={() => setEditing(null)} onSaved={load} canEditRole={isAdmin} />
+      <EditDialog user={editing} onClose={() => setEditing(null)} onSaved={load} isAdmin={isAdmin} />
+      {creating && <CreateDialog onClose={() => setCreating(false)} onCreated={load} />}
     </div>
   );
 }
 
-function EditDialog({ user, onClose, onSaved, canEditRole }: any) {
+function EditDialog({ user, onClose, onSaved, isAdmin }: any) {
   const [form, setForm] = useState<any>(null);
   const [role, setRole] = useState<string>("staff");
+  const [newPwd, setNewPwd] = useState("");
+  const resetPwd = useServerFn(adminResetPassword);
   useEffect(() => {
     if (user) {
-      setForm({ full_name: user.full_name, sgc_id: user.sgc_id, department: user.department, mobile: user.mobile, status: user.status });
+      setForm({
+        full_name: user.full_name,
+        sgc_id: user.sgc_id,
+        department: user.department,
+        mobile: user.mobile,
+        status: user.status,
+        email: user.email,
+      });
       setRole(user.roles?.[0] ?? "staff");
+      setNewPwd("");
     }
   }, [user]);
   if (!user || !form) return null;
   const save = async () => {
-    const { error } = await supabase.from("profiles").update(form).eq("id", user.id);
+    const { email: _ignore, ...patch } = form;
+    const { error } = await supabase.from("profiles").update(patch).eq("id", user.id);
     if (error) return toast.error(error.message);
-    if (canEditRole && role !== user.roles?.[0]) {
+    if (isAdmin && role !== user.roles?.[0]) {
       await supabase.from("user_roles").delete().eq("user_id", user.id);
       await supabase.from("user_roles").insert({ user_id: user.id, role: role as any });
     }
     toast.success("Saved"); onSaved(); onClose();
   };
+  const doResetPwd = async () => {
+    if (newPwd.length < 8) return toast.error("Password must be at least 8 chars");
+    try {
+      await resetPwd({ data: { user_id: user.id, password: newPwd } });
+      toast.success("Password reset");
+      setNewPwd("");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to reset");
+    }
+  };
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="glass-strong">
+      <DialogContent className="glass-strong max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Edit {user.full_name}</DialogTitle></DialogHeader>
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2"><Label>Full name</Label><Input value={form.full_name ?? ""} onChange={(e) => setForm({ ...form, full_name: e.target.value })} /></div>
+          <div className="col-span-2"><Label>Email</Label><Input value={form.email ?? ""} disabled /></div>
           <div><Label>SGC ID</Label><Input value={form.sgc_id ?? ""} onChange={(e) => setForm({ ...form, sgc_id: e.target.value })} /></div>
-          <div><Label>Department</Label><Input value={form.department ?? ""} onChange={(e) => setForm({ ...form, department: e.target.value })} /></div>
+          <div>
+            <Label>Department</Label>
+            <Select value={form.department ?? ""} onValueChange={(v) => setForm({ ...form, department: v })}>
+              <SelectTrigger><SelectValue placeholder="Pick…" /></SelectTrigger>
+              <SelectContent>
+                {DEPARTMENTS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
           <div><Label>Mobile</Label><Input value={form.mobile ?? ""} onChange={(e) => setForm({ ...form, mobile: e.target.value })} /></div>
           <div>
             <Label>Status</Label>
@@ -125,7 +167,7 @@ function EditDialog({ user, onClose, onSaved, canEditRole }: any) {
               </SelectContent>
             </Select>
           </div>
-          {canEditRole && (
+          {isAdmin && (
             <div className="col-span-2">
               <Label>Role</Label>
               <Select value={role} onValueChange={setRole}>
@@ -138,10 +180,95 @@ function EditDialog({ user, onClose, onSaved, canEditRole }: any) {
               </Select>
             </div>
           )}
+          {isAdmin && (
+            <div className="col-span-2 border-t border-border pt-3 mt-1">
+              <Label className="flex items-center gap-2"><KeyRound className="h-3.5 w-3.5" /> Reset password</Label>
+              <div className="flex gap-2 mt-1">
+                <Input type="text" placeholder="New password (min 8 chars)" value={newPwd} onChange={(e) => setNewPwd(e.target.value)} />
+                <Button variant="outline" onClick={doResetPwd} disabled={newPwd.length < 8}>Reset</Button>
+              </div>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={save} className="gradient-primary text-primary-foreground border-0">Save</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const createFn = useServerFn(adminCreateUser);
+  const [form, setForm] = useState({
+    full_name: "", email: "", password: "", sgc_id: "", mobile: "",
+    department: "Inventory" as (typeof DEPARTMENTS)[number],
+    role: "staff" as "admin" | "manager" | "staff",
+    status: "approved" as "approved" | "pending" | "rejected",
+  });
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    if (!form.email || form.password.length < 8 || !form.full_name || !form.sgc_id) {
+      return toast.error("Fill name, SGC, email and 8+ char password");
+    }
+    setBusy(true);
+    try {
+      await createFn({ data: { ...form, mobile: form.mobile || null } });
+      toast.success("User created");
+      onCreated();
+      onClose();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed");
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="glass-strong max-h-[90vh] overflow-y-auto">
+        <DialogHeader><DialogTitle>Add new user</DialogTitle></DialogHeader>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2"><Label>Full name</Label><Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} /></div>
+          <div><Label>SGC ID</Label><Input value={form.sgc_id} onChange={(e) => setForm({ ...form, sgc_id: e.target.value })} /></div>
+          <div><Label>Mobile</Label><Input value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} /></div>
+          <div className="col-span-2"><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+          <div className="col-span-2"><Label>Initial password</Label><Input type="text" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="8+ characters" /></div>
+          <div>
+            <Label>Department</Label>
+            <Select value={form.department} onValueChange={(v: any) => setForm({ ...form, department: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>{DEPARTMENTS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Role</Label>
+            <Select value={form.role} onValueChange={(v: any) => setForm({ ...form, role: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="admin">Admin</SelectItem>
+                <SelectItem value="manager">Manager</SelectItem>
+                <SelectItem value="staff">Staff</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="col-span-2">
+            <Label>Status</Label>
+            <Select value={form.status} onValueChange={(v: any) => setForm({ ...form, status: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="approved">Approved</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="rejected">Rejected</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button onClick={submit} disabled={busy} className="gradient-primary text-primary-foreground border-0">
+            {busy ? "Creating…" : "Create user"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
