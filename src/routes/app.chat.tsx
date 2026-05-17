@@ -8,14 +8,22 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Search, MessageCircle, Check, CheckCheck } from "lucide-react";
+import { Send, Search, MessageCircle, Check, CheckCheck, BellOff, Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 
 export const Route = createFileRoute("/app/chat")({ component: Chat });
 
 type Person = { id: string; full_name: string; department: string | null; profile_image: string | null };
-type Msg = { id: string; sender_id: string; recipient_id: string; content: string; created_at: string; read_at: string | null };
+type Msg = {
+  id: string;
+  sender_id: string;
+  recipient_id: string;
+  content: string;
+  created_at: string;
+  read_at: string | null;
+  delivered_at?: string | null;
+};
 
 function formatWhen(iso: string) {
   const d = new Date(iso);
@@ -28,7 +36,7 @@ function formatWhen(iso: string) {
 }
 
 function Chat() {
-  const { user, profile } = useAuth();
+  const { user, profile, canManage } = useAuth();
   const [people, setPeople] = useState<Person[]>([]);
   const [active, setActive] = useState<Person | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -36,7 +44,50 @@ function Chat() {
   const [q, setQ] = useState("");
   const [unread, setUnread] = useState<Record<string, number>>({});
   const [lastMsg, setLastMsg] = useState<Record<string, Msg>>({});
+  const [myDeptChatOn, setMyDeptChatOn] = useState(true);
+  const [notifPerm, setNotifPerm] = useState<NotificationPermission>(
+    typeof Notification !== "undefined" ? Notification.permission : "default"
+  );
   const endRef = useRef<HTMLDivElement>(null);
+  const activeIdRef = useRef<string | null>(null);
+  useEffect(() => { activeIdRef.current = active?.id ?? null; }, [active?.id]);
+
+  // dept chat on/off
+  useEffect(() => {
+    if (!profile?.department) return;
+    const load = async () => {
+      const { data } = await supabase
+        .from("dept_chat_settings")
+        .select("enabled")
+        .eq("department", profile.department!)
+        .maybeSingle();
+      setMyDeptChatOn(data?.enabled ?? true);
+    };
+    load();
+    const ch = supabase
+      .channel("chat-page-settings")
+      .on("postgres_changes", { event: "*", schema: "public", table: "dept_chat_settings" }, load)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [profile?.department]);
+
+  const requestNotif = async () => {
+    if (typeof Notification === "undefined") return;
+    const p = await Notification.requestPermission();
+    setNotifPerm(p);
+  };
+  const fireDesktopNotif = (m: Msg, from: Person | undefined) => {
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    if (document.visibilityState === "visible" && activeIdRef.current === m.sender_id) return;
+    try {
+      const n = new Notification(from?.full_name ?? "New message", {
+        body: m.content.slice(0, 140),
+        tag: `msg-${m.sender_id}`,
+        icon: from?.profile_image ?? undefined,
+      });
+      n.onclick = () => { window.focus(); n.close(); };
+    } catch { /* ignore */ }
+  };
 
   // load contacts (everyone visible to me — RLS handles dept scoping)
   useEffect(() => {
@@ -78,8 +129,9 @@ function Chat() {
       .or(`and(sender_id.eq.${user.id},recipient_id.eq.${other.id}),and(sender_id.eq.${other.id},recipient_id.eq.${user.id})`)
       .order("created_at", { ascending: true });
     setMessages((data ?? []) as Msg[]);
-    // mark read
-    await supabase.from("messages").update({ read_at: new Date().toISOString() })
+    // mark delivered + read for messages I received
+    const now = new Date().toISOString();
+    await supabase.from("messages").update({ delivered_at: now, read_at: now })
       .eq("recipient_id", user.id).eq("sender_id", other.id).is("read_at", null);
     loadOverview();
   };
@@ -96,6 +148,10 @@ function Chat() {
         if (m.recipient_id !== user.id && m.sender_id !== user.id) return;
         const peer = m.sender_id === user.id ? m.recipient_id : m.sender_id;
         setLastMsg((prev) => ({ ...prev, [peer]: m }));
+        // Mark delivered immediately when *I* am the recipient
+        if (m.recipient_id === user.id && !m.delivered_at) {
+          supabase.from("messages").update({ delivered_at: new Date().toISOString() }).eq("id", m.id);
+        }
         if (active && (m.sender_id === active.id || m.recipient_id === active.id)) {
           setMessages((prev) => [...prev, m]);
           if (m.recipient_id === user.id) {
@@ -103,11 +159,20 @@ function Chat() {
           }
         } else if (m.recipient_id === user.id) {
           setUnread((u) => ({ ...u, [m.sender_id]: (u[m.sender_id] ?? 0) + 1 }));
+          const from = people.find((p) => p.id === m.sender_id);
+          fireDesktopNotif(m, from);
         }
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, (payload) => {
+        const m = payload.new as Msg;
+        if (m.sender_id !== user.id && m.recipient_id !== user.id) return;
+        const peer = m.sender_id === user.id ? m.recipient_id : m.sender_id;
+        setLastMsg((prev) => (prev[peer]?.id === m.id ? { ...prev, [peer]: m } : prev));
+        setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, ...m } : x)));
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [user?.id, active?.id]);
+  }, [user?.id, active?.id, people]);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages.length]);
 
@@ -135,15 +200,35 @@ function Chat() {
 
   const sameDept = (p: Person) =>
     !!profile?.department && p.department === profile.department;
-  const canMessage = active ? sameDept(active) : false;
+  const canMessage = active ? (sameDept(active) && (canManage || myDeptChatOn)) : false;
+
+  if (!canManage && !myDeptChatOn) {
+    return (
+      <div className="max-w-md mx-auto mt-20 text-center glass-strong rounded-2xl p-8">
+        <BellOff className="h-10 w-10 mx-auto text-muted-foreground" />
+        <h1 className="text-2xl font-bold mt-3">Chat is turned off</h1>
+        <p className="text-sm text-muted-foreground mt-2">
+          Your department's chat has been disabled by a manager. Please check back later.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Chat</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Private 1-on-1 messages within your department · Auto-deleted after 10 days
-        </p>
+      <div className="flex items-end justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Chat</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Private 1-on-1 messages within your department · Auto-deleted after 10 days
+          </p>
+        </div>
+        {notifPerm !== "granted" && (
+          <Button onClick={requestNotif} variant="outline" size="sm">
+            <Bell className="h-4 w-4 mr-2" />
+            {notifPerm === "denied" ? "Notifications blocked" : "Enable desktop notifications"}
+          </Button>
+        )}
       </div>
       <Card className="glass-strong overflow-hidden grid grid-cols-[320px_1fr] h-[calc(100vh-220px)] min-h-[520px]">
         {/* Sidebar */}
@@ -200,7 +285,9 @@ function Chat() {
                             {mineLast && (
                               last?.read_at
                                 ? <CheckCheck className="h-3 w-3 text-primary shrink-0" />
-                                : <Check className="h-3 w-3 shrink-0" />
+                                : last?.delivered_at
+                                  ? <CheckCheck className="h-3 w-3 shrink-0 opacity-60" />
+                                  : <Check className="h-3 w-3 shrink-0 opacity-60" />
                             )}
                             <span className="truncate">{preview}</span>
                           </p>
@@ -267,7 +354,9 @@ function Chat() {
                             <span>{new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                             {mine && (m.read_at
                               ? <CheckCheck className="h-3 w-3" />
-                              : <Check className="h-3 w-3" />
+                              : m.delivered_at
+                                ? <CheckCheck className="h-3 w-3 opacity-60" />
+                                : <Check className="h-3 w-3 opacity-60" />
                             )}
                           </p>
                         </div>

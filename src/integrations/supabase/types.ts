@@ -50,10 +50,32 @@ export type Database = {
         }
         Relationships: []
       }
+      dept_chat_settings: {
+        Row: {
+          department: string
+          enabled: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          department: string
+          enabled?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          department?: string
+          enabled?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           content: string
           created_at: string
+          delivered_at: string | null
           id: string
           read_at: string | null
           recipient_id: string
@@ -62,6 +84,7 @@ export type Database = {
         Insert: {
           content: string
           created_at?: string
+          delivered_at?: string | null
           id?: string
           read_at?: string | null
           recipient_id: string
@@ -70,6 +93,7 @@ export type Database = {
         Update: {
           content?: string
           created_at?: string
+          delivered_at?: string | null
           id?: string
           read_at?: string | null
           recipient_id?: string
