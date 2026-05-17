@@ -285,7 +285,9 @@ function Chat() {
                             {mineLast && (
                               last?.read_at
                                 ? <CheckCheck className="h-3 w-3 text-primary shrink-0" />
-                                : <Check className="h-3 w-3 shrink-0" />
+                                : last?.delivered_at
+                                  ? <CheckCheck className="h-3 w-3 shrink-0 opacity-60" />
+                                  : <Check className="h-3 w-3 shrink-0 opacity-60" />
                             )}
                             <span className="truncate">{preview}</span>
                           </p>
@@ -352,7 +354,9 @@ function Chat() {
                             <span>{new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                             {mine && (m.read_at
                               ? <CheckCheck className="h-3 w-3" />
-                              : <Check className="h-3 w-3" />
+                              : m.delivered_at
+                                ? <CheckCheck className="h-3 w-3 opacity-60" />
+                                : <Check className="h-3 w-3 opacity-60" />
                             )}
                           </p>
                         </div>
