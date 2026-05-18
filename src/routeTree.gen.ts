@@ -21,6 +21,7 @@ import { Route as AppReportsRouteImport } from './routes/app.reports'
 import { Route as AppProfileRouteImport } from './routes/app.profile'
 import { Route as AppPendingRouteImport } from './routes/app.pending'
 import { Route as AppMonitoringRouteImport } from './routes/app.monitoring'
+import { Route as AppDepartmentsRouteImport } from './routes/app.departments'
 import { Route as AppDashboardRouteImport } from './routes/app.dashboard'
 import { Route as AppCommonRouteImport } from './routes/app.common'
 import { Route as AppChatSettingsRouteImport } from './routes/app.chat-settings'
@@ -86,6 +87,11 @@ const AppMonitoringRoute = AppMonitoringRouteImport.update({
   path: '/monitoring',
   getParentRoute: () => AppRoute,
 } as any)
+const AppDepartmentsRoute = AppDepartmentsRouteImport.update({
+  id: '/departments',
+  path: '/departments',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -118,6 +124,7 @@ export interface FileRoutesByFullPath {
   '/app/chat-settings': typeof AppChatSettingsRoute
   '/app/common': typeof AppCommonRoute
   '/app/dashboard': typeof AppDashboardRoute
+  '/app/departments': typeof AppDepartmentsRoute
   '/app/monitoring': typeof AppMonitoringRoute
   '/app/pending': typeof AppPendingRoute
   '/app/profile': typeof AppProfileRoute
@@ -136,6 +143,7 @@ export interface FileRoutesByTo {
   '/app/chat-settings': typeof AppChatSettingsRoute
   '/app/common': typeof AppCommonRoute
   '/app/dashboard': typeof AppDashboardRoute
+  '/app/departments': typeof AppDepartmentsRoute
   '/app/monitoring': typeof AppMonitoringRoute
   '/app/pending': typeof AppPendingRoute
   '/app/profile': typeof AppProfileRoute
@@ -155,6 +163,7 @@ export interface FileRoutesById {
   '/app/chat-settings': typeof AppChatSettingsRoute
   '/app/common': typeof AppCommonRoute
   '/app/dashboard': typeof AppDashboardRoute
+  '/app/departments': typeof AppDepartmentsRoute
   '/app/monitoring': typeof AppMonitoringRoute
   '/app/pending': typeof AppPendingRoute
   '/app/profile': typeof AppProfileRoute
@@ -175,6 +184,7 @@ export interface FileRouteTypes {
     | '/app/chat-settings'
     | '/app/common'
     | '/app/dashboard'
+    | '/app/departments'
     | '/app/monitoring'
     | '/app/pending'
     | '/app/profile'
@@ -193,6 +203,7 @@ export interface FileRouteTypes {
     | '/app/chat-settings'
     | '/app/common'
     | '/app/dashboard'
+    | '/app/departments'
     | '/app/monitoring'
     | '/app/pending'
     | '/app/profile'
@@ -211,6 +222,7 @@ export interface FileRouteTypes {
     | '/app/chat-settings'
     | '/app/common'
     | '/app/dashboard'
+    | '/app/departments'
     | '/app/monitoring'
     | '/app/pending'
     | '/app/profile'
@@ -314,6 +326,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppMonitoringRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/departments': {
+      id: '/app/departments'
+      path: '/departments'
+      fullPath: '/app/departments'
+      preLoaderRoute: typeof AppDepartmentsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/dashboard': {
       id: '/app/dashboard'
       path: '/dashboard'
@@ -350,6 +369,7 @@ interface AppRouteChildren {
   AppChatSettingsRoute: typeof AppChatSettingsRoute
   AppCommonRoute: typeof AppCommonRoute
   AppDashboardRoute: typeof AppDashboardRoute
+  AppDepartmentsRoute: typeof AppDepartmentsRoute
   AppMonitoringRoute: typeof AppMonitoringRoute
   AppPendingRoute: typeof AppPendingRoute
   AppProfileRoute: typeof AppProfileRoute
@@ -363,6 +383,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppChatSettingsRoute: AppChatSettingsRoute,
   AppCommonRoute: AppCommonRoute,
   AppDashboardRoute: AppDashboardRoute,
+  AppDepartmentsRoute: AppDepartmentsRoute,
   AppMonitoringRoute: AppMonitoringRoute,
   AppPendingRoute: AppPendingRoute,
   AppProfileRoute: AppProfileRoute,

@@ -7,13 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DEPARTMENTS } from "@/lib/departments";
+import { useDepartments } from "@/hooks/use-departments";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/register")({ component: Register });
 
 function Register() {
   const navigate = useNavigate();
+  const { names: deptNames } = useDepartments();
   const [form, setForm] = useState({
     full_name: "",
     sgc_id: "",
@@ -74,7 +75,7 @@ function Register() {
             <Select value={form.department} onValueChange={(v) => setForm({ ...form, department: v })}>
               <SelectTrigger className="mt-1"><SelectValue placeholder="Select department" /></SelectTrigger>
               <SelectContent>
-                {DEPARTMENTS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                {deptNames.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
