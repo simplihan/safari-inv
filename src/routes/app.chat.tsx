@@ -35,6 +35,15 @@ function formatWhen(iso: string) {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
+function dayLabel(iso: string) {
+  const d = new Date(iso);
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return "Today";
+  const yest = new Date(now); yest.setDate(now.getDate() - 1);
+  if (d.toDateString() === yest.toDateString()) return "Yesterday";
+  return d.toLocaleDateString(undefined, { day: "2-digit", month: "long", year: "numeric" });
+}
+
 function Chat() {
   const { user, profile, canManage } = useAuth();
   const [people, setPeople] = useState<Person[]>([]);
@@ -334,11 +343,20 @@ function Chat() {
               </header>
               <ScrollArea className="flex-1 px-4 py-4 bg-gradient-to-b from-transparent to-accent/10">
                 <div className="space-y-2">
-                  {messages.map((m) => {
+                  {messages.map((m, i) => {
                     const mine = m.sender_id === user?.id;
+                    const prev = messages[i - 1];
+                    const showDate = !prev || new Date(prev.created_at).toDateString() !== new Date(m.created_at).toDateString();
                     return (
+                      <div key={m.id}>
+                        {showDate && (
+                          <div className="flex justify-center my-3">
+                            <span className="text-[11px] font-medium text-muted-foreground bg-muted/60 rounded-full px-3 py-1">
+                              {dayLabel(m.created_at)}
+                            </span>
+                          </div>
+                        )}
                       <motion.div
-                        key={m.id}
                         initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
                         className={cn("flex", mine ? "justify-end" : "justify-start")}
                       >
@@ -361,6 +379,7 @@ function Chat() {
                           </p>
                         </div>
                       </motion.div>
+                      </div>
                     );
                   })}
                   {messages.length === 0 && (
