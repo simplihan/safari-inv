@@ -72,7 +72,15 @@ function Common() {
       .from("break_logs").select("*")
       .gte("out_time", start.toISOString())
       .order("out_time", { ascending: false });
-    setChartRows((logs ?? []) as Row[]);
+    const list = (logs ?? []) as Row[];
+    // Hydrate profiles for everyone in this chart range so the user picker
+    // never shows "Unknown".
+    const ids = Array.from(new Set(list.map((l) => l.user_id)));
+    const { data: profs } = ids.length
+      ? await supabase.from("profiles").select("id, full_name, department, profile_image").in("id", ids)
+      : { data: [] as any[] };
+    const pmap = new Map((profs ?? []).map((p: any) => [p.id, p]));
+    setChartRows(list.map((l) => ({ ...l, profile: pmap.get(l.user_id) })));
   };
   useEffect(() => { loadChart(); }, [period]);
 
