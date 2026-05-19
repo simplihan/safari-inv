@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { getRequest } from "@tanstack/react-start/server";
+import { getRequestIP, getRequestHeader } from "@tanstack/react-start/server";
 
 function parseUA(ua: string) {
   const u = ua.toLowerCase();
@@ -31,10 +31,8 @@ export const recordLoginEvent = createServerFn({ method: "POST" })
     let ip: string | null = null;
     let uaHeader: string | null = null;
     try {
-      const req = getRequest();
-      const h = req.headers;
-      ip = (h.get("cf-connecting-ip") || h.get("x-forwarded-for")?.split(",")[0].trim() || h.get("x-real-ip") || null);
-      uaHeader = h.get("user-agent");
+      ip = getRequestIP({ xForwardedFor: true }) ?? null;
+      uaHeader = getRequestHeader("user-agent") ?? null;
     } catch { /* ignore */ }
     const ua = data.user_agent ?? uaHeader ?? "";
     const { os, browser, device } = parseUA(ua);
