@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { recordLoginEvent } from "@/lib/login-events.functions";
 
 export const Route = createFileRoute("/login")({ component: Login });
 
@@ -56,6 +57,8 @@ function Login() {
       return;
     }
     localStorage.setItem("loginAt", String(Date.now()));
+    // Log device/IP (fire-and-forget)
+    recordLoginEvent({ data: { user_agent: navigator.userAgent } }).catch(() => {});
     toast.success("Welcome back");
     navigate({ to: "/app/dashboard" });
   };
@@ -71,7 +74,7 @@ function Login() {
           <div className="h-10 w-10 rounded-xl gradient-primary grid place-items-center">
             <Activity className="h-5 w-5 text-primary-foreground" />
           </div>
-          <span className="font-semibold">PulseHR</span>
+          <span className="font-semibold">Pulse Inv</span>
         </Link>
         <h1 className="text-2xl font-bold text-center">Welcome back</h1>
         <p className="text-sm text-muted-foreground text-center mt-1">Sign in to continue</p>

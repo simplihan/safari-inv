@@ -24,6 +24,7 @@ function Reports() {
   const [to, setTo] = useState(today);
   const [rows, setRows] = useState<any[]>([]);
   const [profiles, setProfiles] = useState<Record<string, any>>({});
+  const [logins, setLogins] = useState<any[]>([]);
 
   useEffect(() => {
     if (!canManage) return;
@@ -34,6 +35,11 @@ function Reports() {
       const { data: profs } = await supabase.from("profiles").select("id, full_name, department");
       setProfiles(Object.fromEntries((profs ?? []).map((p: any) => [p.id, p])));
       setRows(data ?? []);
+      const { data: ev } = await supabase
+        .from("login_events").select("*")
+        .gte("created_at", fromIso).lt("created_at", toIso)
+        .order("created_at", { ascending: false }).limit(200);
+      setLogins(ev ?? []);
     })();
   }, [from, to, canManage]);
 
@@ -60,12 +66,12 @@ function Reports() {
     });
     const blob = new Blob([lines.join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = `pulsehr-${from}-to-${to}.csv`; a.click();
+    const a = document.createElement("a"); a.href = url; a.download = `pulse-inv-${from}-to-${to}.csv`; a.click();
   };
 
   const exportPDF = () => {
     const doc = new jsPDF();
-    doc.text(`PulseHR Report  ${from} -> ${to}`, 14, 16);
+    doc.text(`Pulse Inv Report  ${from} -> ${to}`, 14, 16);
     autoTable(doc, {
       startY: 22,
       head: [["Name", "Department", "Reason", "Out", "In", "Min"]],
@@ -74,7 +80,7 @@ function Reports() {
         return [p?.full_name ?? "—", p?.department ?? "—", r.reason, fmtDateTime(r.out_time), fmtDateTime(r.in_time), r.duration_minutes ?? "—"];
       }),
     });
-    doc.save(`pulsehr-${from}-to-${to}.pdf`);
+    doc.save(`pulse-inv-${from}-to-${to}.pdf`);
   };
 
   return (
@@ -140,6 +146,33 @@ function Reports() {
               ))}
             </tbody>
           </table>
+        </CardContent>
+      </Card>
+
+      <Card className="glass">
+        <CardHeader><CardTitle>Sign-in log (device · IP)</CardTitle></CardHeader>
+        <CardContent className="overflow-auto">
+          {logins.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">No sign-ins in range.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="text-left text-muted-foreground">
+                <tr><th className="py-2">User</th><th>Device</th><th>OS</th><th>Browser</th><th>IP</th><th>When</th></tr>
+              </thead>
+              <tbody>
+                {logins.map((l: any) => (
+                  <tr key={l.id} className="border-t border-border">
+                    <td className="py-2">{profiles[l.user_id]?.full_name ?? "—"}</td>
+                    <td>{l.device ?? "—"}</td>
+                    <td>{l.os ?? "—"}</td>
+                    <td>{l.browser ?? "—"}</td>
+                    <td className="font-mono text-xs">{l.ip ?? "—"}</td>
+                    <td className="text-xs">{fmtDateTime(l.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </CardContent>
       </Card>
     </div>

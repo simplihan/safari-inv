@@ -92,6 +92,39 @@ export type Database = {
         }
         Relationships: []
       }
+      login_events: {
+        Row: {
+          browser: string | null
+          created_at: string
+          device: string | null
+          id: string
+          ip: string | null
+          os: string | null
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          browser?: string | null
+          created_at?: string
+          device?: string | null
+          id?: string
+          ip?: string | null
+          os?: string | null
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          browser?: string | null
+          created_at?: string
+          device?: string | null
+          id?: string
+          ip?: string | null
+          os?: string | null
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           content: string
@@ -130,6 +163,7 @@ export type Database = {
           full_name: string
           id: string
           mobile: string | null
+          notif_enabled: boolean
           profile_image: string | null
           sgc_id: string | null
           status: Database["public"]["Enums"]["user_status"]
@@ -142,6 +176,7 @@ export type Database = {
           full_name: string
           id: string
           mobile?: string | null
+          notif_enabled?: boolean
           profile_image?: string | null
           sgc_id?: string | null
           status?: Database["public"]["Enums"]["user_status"]
@@ -154,6 +189,7 @@ export type Database = {
           full_name?: string
           id?: string
           mobile?: string | null
+          notif_enabled?: boolean
           profile_image?: string | null
           sgc_id?: string | null
           status?: Database["public"]["Enums"]["user_status"]

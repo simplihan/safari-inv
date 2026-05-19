@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
 
 export const Route = createFileRoute("/app/profile")({ component: Profile });
 
@@ -17,15 +18,20 @@ function Profile() {
   const [mobile, setMobile] = useState("");
   const [profileImage, setProfileImage] = useState("");
   const [pwd, setPwd] = useState("");
+  const [notif, setNotif] = useState(true);
 
   useEffect(() => {
-    if (profile) { setMobile(profile.mobile ?? ""); setProfileImage(profile.profile_image ?? ""); }
+    if (profile) {
+      setMobile(profile.mobile ?? "");
+      setProfileImage(profile.profile_image ?? "");
+      setNotif((profile as any).notif_enabled ?? true);
+    }
   }, [profile]);
 
   if (!profile) return null;
 
   const saveInfo = async () => {
-    const { error } = await supabase.from("profiles").update({ mobile, profile_image: profileImage }).eq("id", profile.id);
+    const { error } = await supabase.from("profiles").update({ mobile, profile_image: profileImage, notif_enabled: notif } as any).eq("id", profile.id);
     if (error) return toast.error(friendlyError(error));
     toast.success("Profile updated"); refresh();
   };
@@ -62,6 +68,16 @@ function Profile() {
             <div className="col-span-2"><Label>Mobile</Label><Input value={mobile} onChange={(e) => setMobile(e.target.value)} /></div>
           </div>
           <Button onClick={saveInfo} className="gradient-primary text-primary-foreground border-0">Save changes</Button>
+        </CardContent>
+      </Card>
+      <Card className="glass">
+        <CardHeader><CardTitle>Notifications</CardTitle></CardHeader>
+        <CardContent className="flex items-center justify-between">
+          <div>
+            <p className="font-medium text-sm">Desktop notifications</p>
+            <p className="text-xs text-muted-foreground">Get a Windows/macOS popup when you receive a new chat message.</p>
+          </div>
+          <Switch checked={notif} onCheckedChange={(v) => { setNotif(v); supabase.from("profiles").update({ notif_enabled: v } as any).eq("id", profile.id).then(refresh); }} />
         </CardContent>
       </Card>
       <Card className="glass">
