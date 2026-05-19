@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { recordLoginEvent } from "@/lib/login-events.functions";
 
 export const Route = createFileRoute("/login")({ component: Login });
 
@@ -56,6 +57,8 @@ function Login() {
       return;
     }
     localStorage.setItem("loginAt", String(Date.now()));
+    // Log device/IP (fire-and-forget)
+    recordLoginEvent({ data: { user_agent: navigator.userAgent } }).catch(() => {});
     toast.success("Welcome back");
     navigate({ to: "/app/dashboard" });
   };
