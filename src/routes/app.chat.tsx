@@ -85,6 +85,17 @@ function Chat() {
     const p = await Notification.requestPermission();
     setNotifPerm(p);
   };
+
+  // Default-on: auto-prompt once per user, only if they haven't disabled in profile
+  useEffect(() => {
+    if (typeof Notification === "undefined") return;
+    if (Notification.permission !== "default") return;
+    if (((profile as any)?.notif_enabled ?? true) === false) return;
+    const k = `notif-asked-${user?.id ?? ""}`;
+    if (localStorage.getItem(k)) return;
+    localStorage.setItem(k, "1");
+    Notification.requestPermission().then(setNotifPerm).catch(() => {});
+  }, [user?.id, profile]);
   const fireDesktopNotif = (m: Msg, from: Person | undefined) => {
     if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
     if (((profile as any)?.notif_enabled ?? true) === false) return;
