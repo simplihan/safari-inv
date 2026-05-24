@@ -7,15 +7,24 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useDepartments } from "@/hooks/use-departments";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/register")({ component: Register });
+export const Route = createFileRoute("/register")({
+  component: Register,
+});
 
 function Register() {
   const navigate = useNavigate();
-  const { names: deptNames } = useDepartments();
+  const { names: deptNames, loading: deptLoading } = useDepartments();
+
   const [form, setForm] = useState({
     full_name: "",
     sgc_id: "",
@@ -24,16 +33,25 @@ function Register() {
     department: "",
     password: "",
   });
+
   const [loading, setLoading] = useState(false);
 
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm({ ...form, [k]: e.target.value });
+  const set =
+    (k: keyof typeof form) =>
+    (e: React.ChangeEvent<HTMLInputElement>) =>
+      setForm({ ...form, [k]: e.target.value });
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.department) return toast.error("Select a department");
+
+    if (!form.department) {
+      return toast.error("Please select a department");
+    }
+
     setLoading(true);
+
     const redirectUrl = `${window.location.origin}/login`;
+
     const { error } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,
@@ -47,9 +65,14 @@ function Register() {
         },
       },
     });
+
     setLoading(false);
-    if (error) return toast.error(friendlyError(error));
-    toast.success("Request submitted. You'll be notified once approved.");
+
+    if (error) {
+      return toast.error(friendlyError(error));
+    }
+
+    toast.success("Request submitted. Waiting for admin approval.");
     navigate({ to: "/login" });
   };
 
@@ -66,29 +89,125 @@ function Register() {
           </div>
           <span className="font-semibold">Pulse Inv</span>
         </Link>
+
         <h1 className="text-2xl font-bold text-center">Request access</h1>
-        <p className="text-sm text-muted-foreground text-center mt-1">An admin or manager will approve your account.</p>
+
+        <p className="text-sm text-muted-foreground text-center mt-1">
+          Admin will approve your account
+        </p>
+
         <form onSubmit={onSubmit} className="mt-6 grid grid-cols-2 gap-4">
-          <div className="col-span-2"><Label>Full name</Label><Input required value={form.full_name} onChange={set("full_name")} className="mt-1" /></div>
-          <div><Label>SGC ID</Label><Input required value={form.sgc_id} onChange={set("sgc_id")} className="mt-1" /></div>
+          <div className="col-span-2">
+            <Label>Full name</Label>
+            <Input
+              required
+              value={form.full_name}
+              onChange={set("full_name")}
+              className="mt-1"
+            />
+          </div>
+
+          <div>
+            <Label>SGC ID</Label>
+            <Input
+              required
+              value={form.sgc_id}
+              onChange={set("sgc_id")}
+              className="mt-1"
+            />
+          </div>
+
+          {/* ✅ FIXED DEPARTMENT SELECT */}
           <div>
             <Label>Department</Label>
-            <Select value={form.department} onValueChange={(v) => setForm({ ...form, department: v })}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="Select department" /></SelectTrigger>
+
+            <Select
+              value={form.department}
+              onValueChange={(v) =>
+                setForm({ ...form, department: v })
+              }
+            >
+              <SelectTrigger className="mt-1">
+                <SelectValue
+                  placeholder={
+                    deptLoading
+                      ? "Loading departments..."
+                      : "Select department"
+                  }
+                />
+              </SelectTrigger>
+
               <SelectContent>
-                {deptNames.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                {/* fallback if empty */}
+                {(!deptNames || deptNames.length === 0) && !deptLoading && (
+                  <>
+                    <SelectItem value="Inventory">Inventory</SelectItem>
+                    <SelectItem value="HR">HR</SelectItem>
+                    <SelectItem value="Finance">Finance</SelectItem>
+                    <SelectItem value="IT">IT</SelectItem>
+                  </>
+                )}
+
+                {/* DB departments */}
+                {deptNames?.map((d) => (
+                  <SelectItem key={d} value={d}>
+                    {d}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
-          <div><Label>Mobile</Label><Input value={form.mobile} onChange={set("mobile")} className="mt-1" /></div>
-          <div><Label>Email</Label><Input type="email" required value={form.email} onChange={set("email")} className="mt-1" /></div>
-          <div className="col-span-2"><Label>Password</Label><Input type="password" required minLength={6} value={form.password} onChange={set("password")} className="mt-1" /></div>
-          <Button type="submit" disabled={loading} className="col-span-2 gradient-primary text-primary-foreground border-0">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit request"}
+
+          <div>
+            <Label>Mobile</Label>
+            <Input
+              value={form.mobile}
+              onChange={set("mobile")}
+              className="mt-1"
+            />
+          </div>
+
+          <div>
+            <Label>Email</Label>
+            <Input
+              type="email"
+              required
+              value={form.email}
+              onChange={set("email")}
+              className="mt-1"
+            />
+          </div>
+
+          <div className="col-span-2">
+            <Label>Password</Label>
+            <Input
+              type="password"
+              required
+              minLength={6}
+              value={form.password}
+              onChange={set("password")}
+              className="mt-1"
+            />
+          </div>
+
+          <Button
+            type="submit"
+            disabled={loading}
+            className="col-span-2 gradient-primary text-primary-foreground border-0"
+          >
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              "Submit request"
+            )}
           </Button>
         </form>
+
         <p className="mt-6 text-sm text-center text-muted-foreground">
-          Already approved? <Link to="/login" className="text-primary font-medium">Sign in</Link>
+          Already approved?{" "}
+          <Link to="/login" className="text-primary font-medium">
+            Sign in
+          </Link>
         </p>
       </motion.div>
     </div>
