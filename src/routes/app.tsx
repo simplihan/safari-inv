@@ -14,31 +14,60 @@ function AppLayout() {
   const navigate = useNavigate();
   const [slow, setSlow] = useState(false);
 
+  // ✅ SAFE REDIRECT LOGIC (FIXED)
   useEffect(() => {
     if (loading) return;
-    if (!session) navigate({ to: "/login" });
-    else if (profile && profile.status !== "approved") navigate({ to: "/login" });
+
+    // no session → login
+    if (!session) {
+      navigate({ to: "/login" });
+      return;
+    }
+
+    // profile not loaded yet → wait (IMPORTANT FIX)
+    if (!profile) return;
+
+    // not approved → login
+    if (profile.status && profile.status !== "approved") {
+      navigate({ to: "/login" });
+    }
   }, [session, loading, profile, navigate]);
 
+  // slow loading detector
   useEffect(() => {
     if (!session || profile) return;
     const t = setTimeout(() => setSlow(true), 6000);
     return () => clearTimeout(t);
   }, [session, profile]);
 
-  if (loading || !session || !profile) {
+  // loading UI (FIXED CONDITION)
+  if (loading || (session && !profile)) {
     return (
       <div className="min-h-screen grid place-items-center p-6">
         <div className="text-center space-y-4 max-w-sm">
           <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" />
+
           {slow && (
             <>
               <p className="text-sm text-muted-foreground">
                 Taking longer than expected to load your profile.
               </p>
+
               <div className="flex gap-2 justify-center">
-                <Button size="sm" variant="outline" onClick={() => refresh()}>Retry</Button>
-                <Button size="sm" variant="ghost" onClick={async () => { await signOut(); navigate({ to: "/login" }); }}>Sign out</Button>
+                <Button size="sm" variant="outline" onClick={() => refresh()}>
+                  Retry
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={async () => {
+                    await signOut();
+                    navigate({ to: "/login" });
+                  }}
+                >
+                  Sign out
+                </Button>
               </div>
             </>
           )}
@@ -46,6 +75,9 @@ function AppLayout() {
       </div>
     );
   }
+
+  // not logged in (final guard)
+  if (!session) return null;
 
   return (
     <AppShell>
