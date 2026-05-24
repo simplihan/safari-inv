@@ -6,22 +6,24 @@ export function useDepartments() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchDepartments = async () => {
+    const load = async () => {
       const { data, error } = await supabase
         .from("departments")
         .select("name");
 
+      console.log("RAW DEPARTMENTS:", data, error);
+
       if (error) {
-        console.log("Department error:", error);
+        console.error(error);
         setNames([]);
       } else {
-        setNames(data?.map((d: any) => d.name) || []);
+        setNames((data ?? []).map((d: any) => d.name));
       }
 
       setLoading(false);
     };
 
-    fetchDepartments();
+    load();
   }, []);
 
   return { names, loading };
