@@ -118,45 +118,47 @@ function Register() {
           </div>
 
           {/* ✅ FIXED DEPARTMENT SELECT */}
-          <div>
-            <Label>Department</Label>
+<div>
+  <Label>Department</Label>
 
-            <Select
-              value={form.department}
-              onValueChange={(v) =>
-                setForm({ ...form, department: v })
-              }
-            >
-              <SelectTrigger className="mt-1">
-                <SelectValue
-                  placeholder={
-                    deptLoading
-                      ? "Loading departments..."
-                      : "Select department"
-                  }
-                />
-              </SelectTrigger>
+  <Select
+    value={form.department}
+    onValueChange={(v) => setForm({ ...form, department: v })}
+  >
+    <SelectTrigger className="mt-1">
+      <SelectValue
+        placeholder={
+          deptLoading
+            ? "Loading departments..."
+            : "Select department"
+        }
+      />
+    </SelectTrigger>
 
-              <SelectContent>
-                {/* fallback if empty */}
-                {(!deptNames || deptNames.length === 0) && !deptLoading && (
-                  <>
-                    <SelectItem value="Inventory">Inventory</SelectItem>
-                    <SelectItem value="HR">HR</SelectItem>
-                    <SelectItem value="Finance">Finance</SelectItem>
-                    <SelectItem value="IT">IT</SelectItem>
-                  </>
-                )}
+    <SelectContent>
+      {/* DEBUG: remove after fix */}
+      {console.log("DEPARTMENTS FROM HOOK:", deptNames)}
 
-                {/* DB departments */}
-                {deptNames?.map((d) => (
-                  <SelectItem key={d} value={d}>
-                    {d}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+      {/* SAFE FALLBACK ALWAYS AVAILABLE */}
+      {(deptNames?.length ?? 0) === 0 ? (
+        <>
+          <SelectItem value="Customer Service">
+            Customer Service
+          </SelectItem>
+          <SelectItem value="Purchase">Purchase</SelectItem>
+          <SelectItem value="Admin">Admin</SelectItem>
+          <SelectItem value="Inventory">Inventory</SelectItem>
+        </>
+      ) : (
+        deptNames.map((d) => (
+          <SelectItem key={d} value={d}>
+            {d}
+          </SelectItem>
+        ))
+      )}
+    </SelectContent>
+  </Select>
+</div>
 
           <div>
             <Label>Mobile</Label>
