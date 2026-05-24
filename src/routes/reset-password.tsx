@@ -21,33 +21,41 @@ function ResetPassword() {
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // detect recovery link
-  const isRecoveryLink =
-    typeof window !== "undefined" &&
-    window.location.hash.includes("access_token");
-
   useEffect(() => {
     let mounted = true;
 
     const initRecovery = async () => {
       try {
-        // 1. IMPORTANT: convert URL hash → Supabase session
-        await supabase.auth.exchangeCodeForSession(window.location.href);
+        const hash = window.location.hash;
 
-        // 2. check session
+        // ✅ CASE 1: OLD SUPABASE RESET LINK (#access_token)
+        if (hash.includes("access_token")) {
+          const { data, error } =
+            await supabase.auth.getSessionFromUrl?.();
+
+          // fallback (important)
+          const session = (await supabase.auth.getSession()).data.session;
+
+          if (mounted && session) {
+            setReady(true);
+            return;
+          }
+        }
+
+        // ✅ CASE 2: NORMAL SESSION CHECK
         const { data } = await supabase.auth.getSession();
 
-        if (mounted && (data.session || isRecoveryLink)) {
+        if (mounted && data.session) {
           setReady(true);
         }
       } catch (err) {
-        console.log("Recovery init error:", err);
+        console.log("Recovery error:", err);
       }
     };
 
     initRecovery();
 
-    // 3. listen auth changes
+    // listen auth changes
     const { data: listener } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (event === "PASSWORD_RECOVERY" && session) {
@@ -60,7 +68,7 @@ function ResetPassword() {
       mounted = false;
       listener.subscription.unsubscribe();
     };
-  }, [isRecoveryLink]);
+  }, []);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,9 +83,7 @@ function ResetPassword() {
 
     setLoading(true);
 
-    const { error } = await supabase.auth.updateUser({
-      password,
-    });
+    const { error } = await supabase.auth.updateUser({ password });
 
     setLoading(false);
 
