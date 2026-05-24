@@ -1,38 +1,28 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-export interface Department {
-  id: string;
-  name: string;
-}
-
 export function useDepartments() {
-  const [departments, setDepartments] = useState<Department[]>([]);
+  const [names, setNames] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
-    const { data } = await supabase
-      .from("departments")
-      .select("id, name")
-      .order("name");
-    setDepartments((data as Department[]) ?? []);
-    setLoading(false);
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      const { data, error } = await supabase
+        .from("departments")
+        .select("name");
+
+      if (error) {
+        console.log("Department error:", error);
+        setNames([]);
+      } else {
+        setNames(data?.map((d: any) => d.name) || []);
+      }
+
+      setLoading(false);
+    };
+
+    fetchDepartments();
   }, []);
 
-  useEffect(() => {
-    load();
-    const ch = supabase
-      .channel("departments-watch")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "departments" },
-        () => load(),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [load]);
-
-  return { departments, names: departments.map((d) => d.name), loading, reload: load };
+  return { names, loading };
 }
