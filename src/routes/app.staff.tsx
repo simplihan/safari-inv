@@ -206,15 +206,25 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
   const { names: deptNames } = useDepartments();
   const [form, setForm] = useState({
     full_name: "", email: "", password: "", sgc_id: "", mobile: "",
-    department: "Inventory",
+    department: "",
     role: "staff" as "admin" | "manager" | "staff",
     status: "approved" as "approved" | "pending" | "rejected",
   });
   const [busy, setBusy] = useState(false);
 
+  useEffect(() => {
+    if (!form.department && deptNames.length > 0) {
+      setForm((f) => ({ ...f, department: deptNames[0] }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deptNames]);
+
   const submit = async () => {
     if (!form.email || form.password.length < 8 || !form.full_name || !form.sgc_id) {
       return toast.error("Fill name, SGC, email and 8+ char password");
+    }
+    if (!form.department) {
+      return toast.error("Select a department");
     }
     setBusy(true);
     try {
@@ -223,7 +233,8 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
       onCreated();
       onClose();
     } catch (e: any) {
-      toast.error(friendlyError(e));
+      console.error("[adminCreateUser]", e);
+      toast.error(e?.message ? `Create failed: ${e.message}` : friendlyError(e));
     } finally { setBusy(false); }
   };
 
