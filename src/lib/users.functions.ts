@@ -39,22 +39,38 @@ export const adminCreateUser = createServerFn({ method: "POST" })
         department: data.department,
       },
     });
-    if (error || !created.user) throw new Error(error?.message ?? "Failed to create user");
+    if (error || !created.user) {
+      console.error("[adminCreateUser] auth.admin.createUser failed:", error);
+      throw new Error(error?.message ?? "Failed to create user");
+    }
 
     const uid = created.user.id;
 
-    // handle_new_user trigger inserts profile (pending, staff). Patch to desired values.
-    await supabaseAdmin.from("profiles").update({
+    // Ensure a profile row exists (in case trigger didn't run / fired with warnings)
+    const { error: upsertErr } = await supabaseAdmin.from("profiles").upsert({
+      id: uid,
+      email: data.email,
       full_name: data.full_name,
       sgc_id: data.sgc_id,
       mobile: data.mobile ?? null,
       department: data.department,
       status: data.status,
-    }).eq("id", uid);
+    });
+    if (upsertErr) {
+      console.error("[adminCreateUser] profile upsert failed:", upsertErr);
+      // rollback auth user so admin can retry cleanly
+      await supabaseAdmin.auth.admin.deleteUser(uid).catch(() => {});
+      throw new Error(`Profile save failed: ${upsertErr.message}`);
+    }
 
-    if (data.role !== "staff") {
-      await supabaseAdmin.from("user_roles").delete().eq("user_id", uid);
-      await supabaseAdmin.from("user_roles").insert({ user_id: uid, role: data.role });
+    // Ensure role
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", uid);
+    const { error: roleErr } = await supabaseAdmin
+      .from("user_roles")
+      .insert({ user_id: uid, role: data.role });
+    if (roleErr) {
+      console.error("[adminCreateUser] role insert failed:", roleErr);
+      throw new Error(`Role assign failed: ${roleErr.message}`);
     }
 
     return { id: uid };
