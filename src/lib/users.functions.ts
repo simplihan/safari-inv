@@ -17,19 +17,20 @@ export const adminCreateUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) => CreateInput.parse(data))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
-    // verify caller is admin
-    const { data: roleRow, error: roleLookupError } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .eq("role", "admin")
-      .maybeSingle();
-    if (roleLookupError) {
-      console.error("[adminCreateUser] admin role lookup failed:", roleLookupError);
-      return { ok: false as const, error: "Unable to verify admin access. Please try again." };
-    }
-    if (!roleRow) return { ok: false as const, error: "Only admins can create users." };
+    try {
+      const { supabase, userId } = context;
+      // verify caller is admin
+      const { data: roleRow, error: roleLookupError } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .eq("role", "admin")
+        .maybeSingle();
+      if (roleLookupError) {
+        console.error("[adminCreateUser] admin role lookup failed:", roleLookupError);
+        return { ok: false as const, error: "Unable to verify admin access. Please try again." };
+      }
+      if (!roleRow) return { ok: false as const, error: "Only admins can create users." };
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -79,7 +80,11 @@ export const adminCreateUser = createServerFn({ method: "POST" })
       return { ok: false as const, error: "Failed to assign user role. Please try again." };
     }
 
-    return { ok: true as const, id: uid };
+      return { ok: true as const, id: uid };
+    } catch (error) {
+      console.error("[adminCreateUser] unexpected failure:", error);
+      return { ok: false as const, error: "Failed to create user. Please try again." };
+    }
   });
 
 export const adminResetPassword = createServerFn({ method: "POST" })
