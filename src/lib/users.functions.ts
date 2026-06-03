@@ -41,7 +41,7 @@ export const adminCreateUser = createServerFn({ method: "POST" })
     });
     if (error || !created.user) {
       console.error("[adminCreateUser] auth.admin.createUser failed:", error);
-      throw new Error(error?.message ?? "Failed to create user");
+      throw new Error("Failed to create user. Please verify the email is not already in use.");
     }
 
     const uid = created.user.id;
@@ -60,7 +60,7 @@ export const adminCreateUser = createServerFn({ method: "POST" })
       console.error("[adminCreateUser] profile upsert failed:", upsertErr);
       // rollback auth user so admin can retry cleanly
       await supabaseAdmin.auth.admin.deleteUser(uid).catch(() => {});
-      throw new Error(`Profile save failed: ${upsertErr.message}`);
+      throw new Error("Failed to save user profile. Please try again.");
     }
 
     // Ensure role
@@ -70,7 +70,7 @@ export const adminCreateUser = createServerFn({ method: "POST" })
       .insert({ user_id: uid, role: data.role });
     if (roleErr) {
       console.error("[adminCreateUser] role insert failed:", roleErr);
-      throw new Error(`Role assign failed: ${roleErr.message}`);
+      throw new Error("Failed to assign user role. Please try again.");
     }
 
     return { id: uid };
@@ -87,6 +87,9 @@ export const adminResetPassword = createServerFn({ method: "POST" })
       .from("user_roles").select("role").eq("user_id", userId).eq("role", "admin").maybeSingle();
     if (!roleRow) throw new Error("Forbidden: admin role required");
     const { error } = await supabaseAdmin.auth.admin.updateUserById(data.user_id, { password: data.password });
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.error("[adminResetPassword] updateUserById failed:", error);
+      throw new Error("Failed to reset password. Please try again.");
+    }
     return { ok: true };
   });
