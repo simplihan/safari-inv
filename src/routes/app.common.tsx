@@ -266,25 +266,26 @@ function Common() {
           </div>
           <div>
             <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-warning" /> Needs attention
+              <Clock className="h-4 w-4 text-warning" /> Most breaks
             </h3>
-            {overview.attention.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">Everyone within quota.</p>
+            {overview.most.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">No data yet.</p>
             ) : (
               <ul className="divide-y divide-border">
-                {overview.attention.map((u) => (
+                {overview.most.map((u, i) => (
                   <li key={u.id} className="py-2 flex items-center gap-3">
+                    <span className="w-5 text-xs font-bold text-muted-foreground">#{i + 1}</span>
                     <Avatar className="h-8 w-8">
                       <AvatarImage src={u.img ?? undefined} />
                       <AvatarFallback className="gradient-primary text-primary-foreground text-xs">
-                        {u.name.split(" ").map((n) => n[0]).slice(0, 2).join("")}
+                        {u.name.split(" ").map((n: string) => n[0]).slice(0, 2).join("")}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{u.name}</p>
                       {u.dept && <p className="text-xs text-muted-foreground truncate">{u.dept}</p>}
                     </div>
-                    <Badge className="bg-warning/20 text-foreground border-warning/40 text-xs">
+                    <Badge variant="secondary" className="text-xs">
                       {fmtDuration(u.breakMin)} break
                     </Badge>
                   </li>
