@@ -1,12 +1,14 @@
 import { friendlyError } from "@/lib/friendly-error";
 import { createFileRoute, Navigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useDepartments } from "@/hooks/use-departments";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,7 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, Check, X, Building2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Check, X, Building2, Mail } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/departments")({ component: DepartmentsPage });
@@ -30,6 +32,33 @@ function DepartmentsPage() {
   const [editingName, setEditingName] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [emailFlags, setEmailFlags] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    supabase
+      .from("departments")
+      .select("id, monthly_report_email")
+      .then(({ data }) => {
+        const map: Record<string, boolean> = {};
+        (data ?? []).forEach((d: any) => { map[d.id] = !!d.monthly_report_email; });
+        setEmailFlags(map);
+      });
+  }, [isAdmin, departments.length]);
+
+  const toggleEmail = async (id: string, name: string, next: boolean) => {
+    const prev = emailFlags[id];
+    setEmailFlags((m) => ({ ...m, [id]: next }));
+    const { error } = await supabase
+      .from("departments")
+      .update({ monthly_report_email: next })
+      .eq("id", id);
+    if (error) {
+      setEmailFlags((m) => ({ ...m, [id]: prev }));
+      return toast.error(friendlyError(error));
+    }
+    toast.success(`Monthly email ${next ? "enabled" : "disabled"} for ${name}`);
+  };
 
   if (!isAdmin) return <Navigate to="/app/dashboard" />;
 
