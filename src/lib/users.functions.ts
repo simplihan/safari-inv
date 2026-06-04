@@ -114,9 +114,5 @@ export const adminSetActive = createServerFn({ method: "POST" })
       .update({ status: data.active ? "approved" : "rejected" })
       .eq("id", data.user_id);
     if (error) throw new Error(error.message);
-    // Optional: revoke all sessions when deactivating
-    if (!data.active) {
-      try { await supabaseAdmin.auth.admin.signOut(data.user_id); } catch {}
-    }
     return { ok: true };
   });
