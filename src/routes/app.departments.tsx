@@ -159,6 +159,17 @@ function DepartmentsPage() {
               ) : (
                 <>
                   <p className="font-medium flex-1">{d.name}</p>
+                  <div className="flex items-center gap-2 mr-2" title="Send monthly report email to managers in this department">
+                    <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                    <Label htmlFor={`email-${d.id}`} className="text-xs text-muted-foreground hidden sm:inline">
+                      Monthly email
+                    </Label>
+                    <Switch
+                      id={`email-${d.id}`}
+                      checked={emailFlags[d.id] ?? true}
+                      onCheckedChange={(v) => toggleEmail(d.id, d.name, v)}
+                    />
+                  </div>
                   <Button size="sm" variant="outline" onClick={() => startEdit(d.id, d.name)}>
                     <Pencil className="h-3.5 w-3.5 mr-1" /> Rename
                   </Button>
