@@ -104,6 +104,7 @@ function MonthlyReports() {
   }, [canManage]);
 
   const aggregated = useMemo(() => {
+    const days = daysInMonth(ym);
     const byUser: Record<string, { id: string; mins: number; sessions: number }> = {};
     for (const r of rows) {
       const p = profiles[r.user_id];
@@ -124,11 +125,12 @@ function MonthlyReports() {
           total_minutes: u.mins,
           sessions: u.sessions,
           avg_minutes: u.sessions ? Math.round(u.mins / u.sessions) : 0,
-          category: categorize(u.mins),
+          avg_per_day: Math.round(u.mins / days),
+          category: categorize(u.mins, days),
         };
       })
       .sort((a, b) => b.total_minutes - a.total_minutes);
-  }, [rows, profiles, scopedDept]);
+  }, [rows, profiles, scopedDept, ym]);
 
   const counts = useMemo(() => {
     const c = { Low: 0, Medium: 0, High: 0 };
