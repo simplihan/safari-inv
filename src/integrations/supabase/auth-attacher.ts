@@ -1,12 +1,17 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createMiddleware } from "@tanstack/react-start";
 import { createClient } from "@/integrations/supabase/client";
 
-export async function attachSupabaseAuth(ctx: any) {
+export const attachSupabaseAuth = createMiddleware().server(async ({ next }) => {
   const supabase = createClient();
+
   const {
     data: { session },
   } = await supabase.auth.getSession();
 
-  ctx.supabaseSession = session ?? null;
-  return ctx;
-}
+  return next({
+    context: {
+      supabaseSession: session ?? null,
+      user: session?.user ?? null,
+    },
+  });
+});
