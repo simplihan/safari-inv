@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_logs: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          entity: string
+          entity_id: string | null
+          id: string
+          payload: Json | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          entity: string
+          entity_id?: string | null
+          id?: string
+          payload?: Json | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          entity?: string
+          entity_id?: string | null
+          id?: string
+          payload?: Json | null
+        }
+        Relationships: []
+      }
       break_logs: {
         Row: {
           created_at: string
@@ -224,7 +254,9 @@ export type Database = {
     }
     Functions: {
       auto_close_stale_breaks: { Args: never; Returns: undefined }
+      cleanup_old_audit_logs: { Args: never; Returns: undefined }
       cleanup_old_break_logs: { Args: never; Returns: undefined }
+      cleanup_old_login_events: { Args: never; Returns: undefined }
       cleanup_old_messages: { Args: never; Returns: undefined }
       get_email_by_sgc: { Args: { _sgc: string }; Returns: string }
     }
