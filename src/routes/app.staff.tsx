@@ -125,9 +125,10 @@ function Staff() {
 
 function EditDialog({ user, onClose, onSaved, isAdmin }: any) {
   const [form, setForm] = useState<any>(null);
-  const [role, setRole] = useState<string>("staff");
+  const [roles, setRoles] = useState<string[]>(["staff"]);
   const [newPwd, setNewPwd] = useState("");
   const resetPwd = useServerFn(adminResetPassword);
+  const setRolesFn = useServerFn(adminSetRoles);
   const { names: deptNames } = useDepartments();
   useEffect(() => {
     if (user) {
@@ -139,18 +140,29 @@ function EditDialog({ user, onClose, onSaved, isAdmin }: any) {
         status: user.status,
         email: user.email,
       });
-      setRole(user.roles?.[0] ?? "staff");
+      setRoles(user.roles?.length ? user.roles : ["staff"]);
       setNewPwd("");
     }
   }, [user]);
   if (!user || !form) return null;
+  const toggleRole = (r: string) => {
+    setRoles((prev) => prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]);
+  };
   const save = async () => {
     const { email: _ignore, ...patch } = form;
     const { error } = await supabase.from("profiles").update(patch).eq("id", user.id);
     if (error) return toast.error(friendlyError(error));
-    if (isAdmin && role !== user.roles?.[0]) {
-      await supabase.from("user_roles").delete().eq("user_id", user.id);
-      await supabase.from("user_roles").insert({ user_id: user.id, role: role as any });
+    if (isAdmin) {
+      const sorted = [...roles].sort().join(",");
+      const current = [...(user.roles ?? [])].sort().join(",");
+      if (sorted !== current) {
+        if (roles.length === 0) return toast.error("Assign at least one role");
+        try {
+          await setRolesFn({ data: { user_id: user.id, roles: roles as any } });
+        } catch (e: any) {
+          return toast.error(friendlyError(e));
+        }
+      }
     }
     toast.success("Saved"); onSaved(); onClose();
   };
@@ -195,15 +207,15 @@ function EditDialog({ user, onClose, onSaved, isAdmin }: any) {
           </div>
           {isAdmin && (
             <div className="col-span-2">
-              <Label>Role</Label>
-              <Select value={role} onValueChange={setRole}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="manager">Manager</SelectItem>
-                  <SelectItem value="staff">Staff</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>Roles</Label>
+              <div className="grid grid-cols-2 gap-2 mt-1">
+                {(["admin", "manager", "supervisor", "staff"] as const).map((r) => (
+                  <label key={r} className="flex items-center gap-2 rounded-md border border-border px-3 py-2 cursor-pointer hover:bg-muted/40">
+                    <Checkbox checked={roles.includes(r)} onCheckedChange={() => toggleRole(r)} />
+                    <span className="capitalize text-sm">{r}</span>
+                  </label>
+                ))}
+              </div>
             </div>
           )}
           {isAdmin && (
