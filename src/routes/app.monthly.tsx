@@ -14,14 +14,20 @@ import { fmtDuration } from "@/lib/format";
 
 export const Route = createFileRoute("/app/monthly")({ component: MonthlyReports });
 
-// Categorization thresholds (total break minutes in the month)
-// Low = ideal, Medium = watch, High = needs attention.
-const LOW_MAX = 300;   // ≤ 5h / month
-const MED_MAX = 600;   // ≤ 10h / month
+// Categorization thresholds (average break minutes per day in the month)
+// Low = ideal (<= 90 min/day), Medium = watch, High = needs attention.
+const LOW_MAX = 90;   // <= 90 min / day
+const MED_MAX = 150;  // <= 150 min / day
 
-function categorize(mins: number): "Low" | "Medium" | "High" {
-  if (mins <= LOW_MAX) return "Low";
-  if (mins <= MED_MAX) return "Medium";
+function daysInMonth(ym: string) {
+  const [y, m] = ym.split("-").map(Number);
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
+
+function categorize(mins: number, days: number): "Low" | "Medium" | "High" {
+  const avgPerDay = days > 0 ? mins / days : 0;
+  if (avgPerDay <= LOW_MAX) return "Low";
+  if (avgPerDay <= MED_MAX) return "Medium";
   return "High";
 }
 
@@ -98,6 +104,7 @@ function MonthlyReports() {
   }, [canManage]);
 
   const aggregated = useMemo(() => {
+    const days = daysInMonth(ym);
     const byUser: Record<string, { id: string; mins: number; sessions: number }> = {};
     for (const r of rows) {
       const p = profiles[r.user_id];
@@ -118,11 +125,12 @@ function MonthlyReports() {
           total_minutes: u.mins,
           sessions: u.sessions,
           avg_minutes: u.sessions ? Math.round(u.mins / u.sessions) : 0,
-          category: categorize(u.mins),
+          avg_per_day: Math.round(u.mins / days),
+          category: categorize(u.mins, days),
         };
       })
       .sort((a, b) => b.total_minutes - a.total_minutes);
-  }, [rows, profiles, scopedDept]);
+  }, [rows, profiles, scopedDept, ym]);
 
   const counts = useMemo(() => {
     const c = { Low: 0, Medium: 0, High: 0 };
@@ -202,7 +210,7 @@ function MonthlyReports() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Monthly Reports</h1>
           <p className="text-muted-foreground mt-1">
-            Activity categorised by total break time. Low = ideal, High = needs attention.
+            Activity categorised by average break time per day. Low = ideal (≤ 90 min/day), High = needs attention.
           </p>
         </div>
         <div className="flex flex-wrap gap-2 items-end">
@@ -240,21 +248,21 @@ function MonthlyReports() {
           <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Low (ideal)</CardTitle></CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-emerald-500">{counts.Low}</div>
-            <p className="text-xs text-muted-foreground mt-1">≤ {LOW_MAX} min / month</p>
+            <p className="text-xs text-muted-foreground mt-1">≤ {LOW_MAX} min / day</p>
           </CardContent>
         </Card>
         <Card className="glass">
           <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Medium</CardTitle></CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-amber-500">{counts.Medium}</div>
-            <p className="text-xs text-muted-foreground mt-1">{LOW_MAX + 1}–{MED_MAX} min / month</p>
+            <p className="text-xs text-muted-foreground mt-1">{LOW_MAX + 1}–{MED_MAX} min / day</p>
           </CardContent>
         </Card>
         <Card className="glass">
           <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">High</CardTitle></CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-rose-500">{counts.High}</div>
-            <p className="text-xs text-muted-foreground mt-1">&gt; {MED_MAX} min / month</p>
+            <p className="text-xs text-muted-foreground mt-1">&gt; {MED_MAX} min / day</p>
           </CardContent>
         </Card>
       </div>
@@ -280,7 +288,7 @@ function MonthlyReports() {
                   <th>Department</th>
                   <th>Sessions</th>
                   <th>Total</th>
-                  <th>Avg/session</th>
+                  <th>Avg/day</th>
                   <th>Category</th>
                 </tr>
               </thead>
@@ -292,7 +300,7 @@ function MonthlyReports() {
                     <td className="text-xs">{a.department}</td>
                     <td>{a.sessions}</td>
                     <td>{fmtDuration(a.total_minutes)}</td>
-                    <td>{a.avg_minutes} min</td>
+                    <td>{a.avg_per_day} min</td>
                     <td>
                       <Badge
                         className={
