@@ -253,8 +253,8 @@ function Chat() {
       </div>
       <Card className="glass-strong overflow-hidden grid grid-cols-[320px_1fr] h-[calc(100vh-220px)] min-h-[520px]">
         {/* Sidebar */}
-        <aside className="border-r border-border flex flex-col">
-          <div className="p-3 border-b border-border space-y-2">
+        <aside className="border-r border-border flex flex-col min-h-0 overflow-hidden">
+          <div className="p-3 border-b border-border space-y-2 shrink-0">
             <div className="flex items-center justify-between px-1">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Chats
@@ -268,7 +268,7 @@ function Chat() {
               <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search people" className="pl-8" />
             </div>
           </div>
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 min-h-0">
             <ul className="py-1">
               {filtered.map((p) => {
                 const last = lastMsg[p.id];
@@ -331,7 +331,7 @@ function Chat() {
         </aside>
 
         {/* Conversation */}
-        <section className="flex flex-col min-w-0">
+        <section className="flex flex-col min-w-0 min-h-0 overflow-hidden">
           {!active ? (
             <div className="flex-1 grid place-items-center text-center text-muted-foreground">
               <div>
