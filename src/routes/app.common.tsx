@@ -244,8 +244,8 @@ function Common() {
             ) : (
               <ul className="divide-y divide-border">
                 {overview.top.map((u, i) => (
-                  <li key={u.id} className="py-2 flex items-center gap-3">
-                    <span className="w-5 text-xs font-bold text-muted-foreground">#{i + 1}</span>
+                  <li key={u.id} className={`py-2 flex items-center gap-3 rounded-md px-2 -mx-2 ${i === 0 ? 'bg-success/10' : i === 1 ? 'bg-success/5' : ''}`}>
+                    <span className={`w-5 text-xs font-bold ${i === 0 ? 'text-success' : i === 1 ? 'text-success/70' : 'text-muted-foreground'}`}>#{i + 1}</span>
                     <Avatar className="h-8 w-8">
                       <AvatarImage src={u.img ?? undefined} />
                       <AvatarFallback className="gradient-primary text-primary-foreground text-xs">
@@ -256,7 +256,7 @@ function Common() {
                       <p className="text-sm font-medium truncate">{u.name}</p>
                       {u.dept && <p className="text-xs text-muted-foreground truncate">{u.dept}</p>}
                     </div>
-                    <Badge variant="secondary" className="text-xs">
+                    <Badge className={`text-xs ${i === 0 ? 'bg-success/20 text-success border-success/40 hover:bg-success/30' : 'bg-secondary text-secondary-foreground'}`}>
                       {fmtDuration(Math.max(0, chartDuty - u.breakMin))} working
                     </Badge>
                   </li>
