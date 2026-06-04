@@ -14,14 +14,20 @@ import { fmtDuration } from "@/lib/format";
 
 export const Route = createFileRoute("/app/monthly")({ component: MonthlyReports });
 
-// Categorization thresholds (total break minutes in the month)
-// Low = ideal, Medium = watch, High = needs attention.
-const LOW_MAX = 300;   // ≤ 5h / month
-const MED_MAX = 600;   // ≤ 10h / month
+// Categorization thresholds (average break minutes per day in the month)
+// Low = ideal (<= 90 min/day), Medium = watch, High = needs attention.
+const LOW_MAX = 90;   // <= 90 min / day
+const MED_MAX = 150;  // <= 150 min / day
 
-function categorize(mins: number): "Low" | "Medium" | "High" {
-  if (mins <= LOW_MAX) return "Low";
-  if (mins <= MED_MAX) return "Medium";
+function daysInMonth(ym: string) {
+  const [y, m] = ym.split("-").map(Number);
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
+
+function categorize(mins: number, days: number): "Low" | "Medium" | "High" {
+  const avgPerDay = days > 0 ? mins / days : 0;
+  if (avgPerDay <= LOW_MAX) return "Low";
+  if (avgPerDay <= MED_MAX) return "Medium";
   return "High";
 }
 
