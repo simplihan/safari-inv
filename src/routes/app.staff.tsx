@@ -11,16 +11,18 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Search, Pencil, UserPlus, KeyRound } from "lucide-react";
+import { Search, Pencil, UserPlus, KeyRound, Power } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
-import { adminCreateUser, adminResetPassword } from "@/lib/users.functions";
+import { adminCreateUser, adminResetPassword, adminSetRoles, adminSetActive } from "@/lib/users.functions";
 import { useDepartments } from "@/hooks/use-departments";
 
 export const Route = createFileRoute("/app/staff")({ component: Staff });
 
 function Staff() {
   const { canManage, isAdmin } = useAuth();
+  const setActive = useServerFn(adminSetActive);
   const [rows, setRows] = useState<any[]>([]);
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<any | null>(null);
@@ -43,6 +45,17 @@ function Staff() {
   const filtered = rows.filter((r) =>
     !q || r.full_name?.toLowerCase().includes(q.toLowerCase()) || r.email?.toLowerCase().includes(q.toLowerCase())
   );
+
+  const toggleActive = async (r: any) => {
+    const active = r.status !== "approved";
+    try {
+      await setActive({ data: { user_id: r.id, active } });
+      toast.success(active ? "User activated" : "User deactivated");
+      load();
+    } catch (e: any) {
+      toast.error(friendlyError(e));
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -89,6 +102,17 @@ function Staff() {
               <Button size="sm" variant="outline" onClick={() => setEditing(r)}>
                 <Pencil className="h-4 w-4 mr-1" /> Edit
               </Button>
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  variant={r.status === "approved" ? "outline" : "default"}
+                  onClick={() => toggleActive(r)}
+                  className={r.status === "approved" ? "" : "gradient-primary text-primary-foreground border-0"}
+                >
+                  <Power className="h-4 w-4 mr-1" />
+                  {r.status === "approved" ? "Deactivate" : "Activate"}
+                </Button>
+              )}
             </CardContent>
           </Card>
         ))}
