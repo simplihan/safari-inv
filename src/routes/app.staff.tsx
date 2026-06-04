@@ -19,6 +19,15 @@ import { useDepartments } from "@/hooks/use-departments";
 
 export const Route = createFileRoute("/app/staff")({ component: Staff });
 
+type StaffRole = "admin" | "manager" | "supervisor" | "staff";
+
+const ROLE_OPTIONS: { value: StaffRole; label: string }[] = [
+  { value: "admin", label: "Admin" },
+  { value: "manager", label: "Manager" },
+  { value: "supervisor", label: "Supervisor" },
+  { value: "staff", label: "Staff" },
+];
+
 function Staff() {
   const { canManage, isAdmin } = useAuth();
   const [rows, setRows] = useState<any[]>([]);
@@ -176,9 +185,9 @@ function EditDialog({ user, onClose, onSaved, isAdmin }: any) {
               <Select value={role} onValueChange={setRole}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="manager">Manager</SelectItem>
-                  <SelectItem value="staff">Staff</SelectItem>
+                  {ROLE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -208,7 +217,7 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
   const [form, setForm] = useState({
     full_name: "", email: "", password: "", sgc_id: "", mobile: "",
     department: "",
-    role: "staff" as "admin" | "manager" | "staff",
+    role: "staff" as StaffRole,
     status: "approved" as "approved" | "pending" | "rejected",
   });
   const [busy, setBusy] = useState(false);
@@ -265,9 +274,9 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
             <Select value={form.role} onValueChange={(v: any) => setForm({ ...form, role: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="manager">Manager</SelectItem>
-                <SelectItem value="staff">Staff</SelectItem>
+                {ROLE_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
