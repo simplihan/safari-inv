@@ -71,7 +71,7 @@ function Reports() {
 
   const exportPDF = () => {
     const doc = new jsPDF();
-    doc.text(`Pulse Inv Report  ${from} -> ${to}`, 14, 16);
+    doc.text(`Pulse Safari Report  ${from} -> ${to}`, 14, 16);
     autoTable(doc, {
       startY: 22,
       head: [["Name", "Department", "Reason", "Out", "In", "Min"]],

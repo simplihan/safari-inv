@@ -74,7 +74,7 @@ function Login() {
           <div className="h-10 w-10 rounded-xl gradient-primary grid place-items-center">
             <Activity className="h-5 w-5 text-primary-foreground" />
           </div>
-          <span className="font-semibold">Pulse Inv</span>
+          <span className="font-semibold">Pulse Safari</span>
         </Link>
         <h1 className="text-2xl font-bold text-center">Welcome back</h1>
         <p className="text-sm text-muted-foreground text-center mt-1">Sign in to continue</p>

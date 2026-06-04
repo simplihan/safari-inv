@@ -25,11 +25,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { profile, roles, signOut, canManage, isStaff, isAdmin } = useAuth();
+  const { profile, roles, signOut, canManage, isStaff, isAdmin, user } = useAuth();
   const navigate = useNavigate();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const [open, setOpen] = useState(false);
   const [chatEnabled, setChatEnabled] = useState(true);
+  const [unreadTotal, setUnreadTotal] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,13 +51,32 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => { cancelled = true; supabase.removeChannel(ch); };
   }, [profile?.department]);
 
+  // Live unread message badge for the Chat nav item
+  useEffect(() => {
+    if (!user?.id) return;
+    const load = async () => {
+      const { count } = await supabase
+        .from("messages")
+        .select("id", { count: "exact", head: true })
+        .eq("recipient_id", user.id)
+        .is("read_at", null);
+      setUnreadTotal(count ?? 0);
+    };
+    load();
+    const ch = supabase
+      .channel("nav-unread")
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, load)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [user?.id]);
+
   // Admin/manager always see chat (to administrate); others only when enabled in their dept
   const showChat = canManage || chatEnabled;
 
   const items = [
     { to: "/app/dashboard", label: "Dashboard", icon: LayoutDashboard, show: true },
     { to: "/app/common", label: "Common Dashboard", icon: Globe, show: true },
-    { to: "/app/chat", label: "Chat", icon: MessageCircle, show: showChat },
+    { to: "/app/chat", label: "Chat", icon: MessageCircle, show: showChat, badge: unreadTotal },
     { to: "/app/chat-settings", label: "Chat Settings", icon: MessagesSquare, show: canManage },
     { to: "/app/departments", label: "Departments", icon: Building2, show: isAdmin },
     { to: "/app/monitoring", label: "Live Monitoring", icon: Activity, show: canManage },
@@ -78,7 +98,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="h-9 w-9 rounded-xl gradient-primary grid place-items-center">
           <Activity className="h-5 w-5 text-primary-foreground" />
         </div>
-        <span className="font-semibold tracking-tight">Pulse Inv</span>
+        <span className="font-semibold tracking-tight">Pulse Safari</span>
       </Link>
       <nav className="mt-6 flex-1 space-y-1">
         {items.map((item) => {
@@ -96,7 +116,12 @@ export function AppShell({ children }: { children: ReactNode }) {
               )}
             >
               <item.icon className="h-4 w-4" />
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {"badge" in item && (item as any).badge > 0 && (
+                <Badge className="gradient-primary text-primary-foreground border-0 h-5 min-w-5 px-1.5 text-[10px]">
+                  {(item as any).badge}
+                </Badge>
+              )}
             </Link>
           );
         })}
@@ -156,7 +181,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Button variant="ghost" size="icon" onClick={() => setOpen(true)}>
             <Menu className="h-5 w-5" />
           </Button>
-          <span className="ml-2 font-semibold">Pulse Inv</span>
+          <span className="ml-2 font-semibold">Pulse Safari</span>
         </header>
         <div className="p-6 md:p-10 max-w-7xl mx-auto">{children}</div>
       </main>
