@@ -11,6 +11,7 @@ import { fmtDuration, fmtDateTime } from "@/lib/format";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell, Legend } from "recharts";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import * as XLSX from "xlsx";
 
 export const Route = createFileRoute("/app/reports")({ component: Reports });
 
@@ -83,6 +84,38 @@ function Reports() {
     doc.save(`pulse-inv-${from}-to-${to}.pdf`);
   };
 
+  const exportXLSX = () => {
+    const data = rows.map((r) => {
+      const p = profiles[r.user_id];
+      return {
+        Name: p?.full_name ?? "—",
+        Department: p?.department ?? "—",
+        Reason: r.reason,
+        Remarks: r.remarks ?? "",
+        Out: r.out_time,
+        In: r.in_time ?? "",
+        "Duration (min)": r.duration_minutes ?? "",
+      };
+    });
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, "Activities");
+    if (logins.length) {
+      const lws = XLSX.utils.json_to_sheet(
+        logins.map((l: any) => ({
+          User: profiles[l.user_id]?.full_name ?? "—",
+          Device: l.device ?? "",
+          OS: l.os ?? "",
+          Browser: l.browser ?? "",
+          IP: l.ip ?? "",
+          When: l.created_at,
+        }))
+      );
+      XLSX.utils.book_append_sheet(wb, lws, "Sign-ins");
+    }
+    XLSX.writeFile(wb, `pulse-safari-${from}-to-${to}.xlsx`);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-end gap-4 justify-between">
@@ -97,6 +130,7 @@ function Reports() {
       </div>
       <div className="flex gap-2">
         <Button onClick={exportCSV} variant="outline"><Download className="h-4 w-4 mr-2" /> CSV</Button>
+        <Button onClick={exportXLSX} variant="outline"><FileDown className="h-4 w-4 mr-2" /> Excel</Button>
         <Button onClick={exportPDF} className="gradient-primary text-primary-foreground border-0"><FileDown className="h-4 w-4 mr-2" /> PDF</Button>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
