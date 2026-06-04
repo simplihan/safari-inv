@@ -243,7 +243,7 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
   const [form, setForm] = useState({
     full_name: "", email: "", password: "", sgc_id: "", mobile: "",
     department: "Inventory",
-    role: "staff" as "admin" | "manager" | "staff",
+    role: "staff" as "admin" | "manager" | "supervisor" | "staff",
     status: "approved" as "approved" | "pending" | "rejected",
   });
   const [busy, setBusy] = useState(false);
@@ -287,6 +287,7 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
               <SelectContent>
                 <SelectItem value="admin">Admin</SelectItem>
                 <SelectItem value="manager">Manager</SelectItem>
+                <SelectItem value="supervisor">Supervisor</SelectItem>
                 <SelectItem value="staff">Staff</SelectItem>
               </SelectContent>
             </Select>
