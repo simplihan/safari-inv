@@ -2,7 +2,7 @@
 
 Before I start, two quick questions inline (answer in chat or just say "go with defaults"):
 
-## Phase 1 — Rebrand + Critical Fixes (this turn)
+## Phase 1
 
 Goal: fix everything blocking users today.
 
