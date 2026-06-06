@@ -1,11 +1,6 @@
 import { createMiddleware } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 
-/**
- * Client-side function middleware that attaches the current Supabase
- * access token to outgoing serverFn RPC requests as
- * `Authorization: Bearer <token>`.
- */
 export const attachSupabaseAuth = createMiddleware({ type: "function" })
   .client(async ({ next }) => {
     let headers: Record<string, string> = {};
