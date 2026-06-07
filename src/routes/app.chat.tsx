@@ -1,0 +1,435 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Send, Search, MessageCircle, Check, CheckCheck, BellOff, Bell } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
+
+export const Route = createFileRoute("/app/chat")({ component: Chat });
+
+type Person = { id: string; full_name: string; department: string | null; profile_image: string | null };
+type Msg = {
+  id: string;
+  sender_id: string;
+  recipient_id: string;
+  content: string;
+  created_at: string;
+  read_at: string | null;
+  delivered_at?: string | null;
+};
+
+function formatWhen(iso: string) {
+  const d = new Date(iso);
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  if (sameDay) return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const yest = new Date(now); yest.setDate(now.getDate() - 1);
+  if (d.toDateString() === yest.toDateString()) return "Yesterday";
+  return d.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+function dayLabel(iso: string) {
+  const d = new Date(iso);
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return "Today";
+  const yest = new Date(now); yest.setDate(now.getDate() - 1);
+  if (d.toDateString() === yest.toDateString()) return "Yesterday";
+  return d.toLocaleDateString(undefined, { day: "2-digit", month: "long", year: "numeric" });
+}
+
+function Chat() {
+  const { user, profile, canManage } = useAuth();
+  const [people, setPeople] = useState<Person[]>([]);
+  const [active, setActive] = useState<Person | null>(null);
+  const [messages, setMessages] = useState<Msg[]>([]);
+  const [draft, setDraft] = useState("");
+  const [q, setQ] = useState("");
+  const [unread, setUnread] = useState<Record<string, number>>({});
+  const [lastMsg, setLastMsg] = useState<Record<string, Msg>>({});
+  const [myDeptChatOn, setMyDeptChatOn] = useState(true);
+  const [notifPerm, setNotifPerm] = useState<NotificationPermission>(
+    typeof Notification !== "undefined" ? Notification.permission : "default"
+  );
+  const endRef = useRef<HTMLDivElement>(null);
+  const activeIdRef = useRef<string | null>(null);
+  useEffect(() => { activeIdRef.current = active?.id ?? null; }, [active?.id]);
+
+  // dept chat on/off
+  useEffect(() => {
+    if (!profile?.department) return;
+    const load = async () => {
+      const { data } = await supabase
+        .from("dept_chat_settings")
+        .select("enabled")
+        .eq("department", profile.department!)
+        .maybeSingle();
+      setMyDeptChatOn(data?.enabled ?? true);
+    };
+    load();
+    const ch = supabase
+      .channel("chat-page-settings")
+      .on("postgres_changes", { event: "*", schema: "public", table: "dept_chat_settings" }, load)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [profile?.department]);
+
+  const requestNotif = async () => {
+    if (typeof Notification === "undefined") return;
+    const p = await Notification.requestPermission();
+    setNotifPerm(p);
+  };
+
+  // Default-on: auto-prompt once per user, only if they haven't disabled in profile
+  useEffect(() => {
+    if (typeof Notification === "undefined") return;
+    if (Notification.permission !== "default") return;
+    if (((profile as any)?.notif_enabled ?? true) === false) return;
+    const k = `notif-asked-${user?.id ?? ""}`;
+    if (localStorage.getItem(k)) return;
+    localStorage.setItem(k, "1");
+    Notification.requestPermission().then(setNotifPerm).catch(() => {});
+  }, [user?.id, profile]);
+  const fireDesktopNotif = (m: Msg, from: Person | undefined) => {
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    if (((profile as any)?.notif_enabled ?? true) === false) return;
+    if (document.visibilityState === "visible" && activeIdRef.current === m.sender_id) return;
+    try {
+      const n = new Notification(from?.full_name ?? "New message", {
+        body: m.content.slice(0, 140),
+        tag: `msg-${m.sender_id}`,
+        icon: from?.profile_image ?? undefined,
+      });
+      n.onclick = () => { window.focus(); n.close(); };
+    } catch { /* ignore */ }
+  };
+
+  // load contacts (everyone visible to me — RLS handles dept scoping)
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, full_name, department, profile_image, status")
+        .eq("status", "approved")
+        .order("full_name");
+      setPeople(((data ?? []) as any[]).filter((p) => p.id !== user?.id));
+    })();
+  }, [user?.id]);
+
+  // load unread counts + last message per peer
+  const loadOverview = async () => {
+    if (!user) return;
+    const [{ data: unreadRows }, { data: recent }] = await Promise.all([
+      supabase.from("messages").select("sender_id").eq("recipient_id", user.id).is("read_at", null),
+      supabase.from("messages").select("*").order("created_at", { ascending: false }).limit(500),
+    ]);
+    const counts: Record<string, number> = {};
+    (unreadRows ?? []).forEach((m: any) => { counts[m.sender_id] = (counts[m.sender_id] ?? 0) + 1; });
+    setUnread(counts);
+    const last: Record<string, Msg> = {};
+    (recent ?? []).forEach((m: any) => {
+      const peer = m.sender_id === user.id ? m.recipient_id : m.sender_id;
+      if (!last[peer]) last[peer] = m as Msg;
+    });
+    setLastMsg(last);
+  };
+  useEffect(() => { loadOverview(); }, [user?.id]);
+
+  // load conversation
+  const loadConvo = async (other: Person) => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("messages")
+      .select("*")
+      .or(`and(sender_id.eq.${user.id},recipient_id.eq.${other.id}),and(sender_id.eq.${other.id},recipient_id.eq.${user.id})`)
+      .order("created_at", { ascending: true });
+    setMessages((data ?? []) as Msg[]);
+    // mark delivered + read for messages I received
+    const now = new Date().toISOString();
+    await supabase.from("messages").update({ delivered_at: now, read_at: now })
+      .eq("recipient_id", user.id).eq("sender_id", other.id).is("read_at", null);
+    loadOverview();
+  };
+
+  useEffect(() => { if (active) loadConvo(active); /* eslint-disable-next-line */ }, [active?.id]);
+
+  // realtime
+  useEffect(() => {
+    if (!user) return;
+    const ch = supabase
+      .channel("messages-feed")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
+        const m = payload.new as Msg;
+        if (m.recipient_id !== user.id && m.sender_id !== user.id) return;
+        const peer = m.sender_id === user.id ? m.recipient_id : m.sender_id;
+        setLastMsg((prev) => ({ ...prev, [peer]: m }));
+        // Mark delivered immediately when *I* am the recipient
+        if (m.recipient_id === user.id && !m.delivered_at) {
+          supabase.from("messages").update({ delivered_at: new Date().toISOString() }).eq("id", m.id);
+        }
+        if (active && (m.sender_id === active.id || m.recipient_id === active.id)) {
+          setMessages((prev) => [...prev, m]);
+          if (m.recipient_id === user.id) {
+            supabase.from("messages").update({ read_at: new Date().toISOString() }).eq("id", m.id);
+          }
+        } else if (m.recipient_id === user.id) {
+          setUnread((u) => ({ ...u, [m.sender_id]: (u[m.sender_id] ?? 0) + 1 }));
+          const from = people.find((p) => p.id === m.sender_id);
+          fireDesktopNotif(m, from);
+        }
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, (payload) => {
+        const m = payload.new as Msg;
+        if (m.sender_id !== user.id && m.recipient_id !== user.id) return;
+        const peer = m.sender_id === user.id ? m.recipient_id : m.sender_id;
+        setLastMsg((prev) => (prev[peer]?.id === m.id ? { ...prev, [peer]: m } : prev));
+        setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, ...m } : x)));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [user?.id, active?.id, people]);
+
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages.length]);
+
+  const send = async () => {
+    const text = draft.trim();
+    if (!text || !active || !user) return;
+    setDraft("");
+    const { error } = await supabase.from("messages").insert({
+      sender_id: user.id, recipient_id: active.id, content: text,
+    });
+    if (error) setDraft(text);
+  };
+
+  // Sort: people with conversations first (by last msg time), then the rest alphabetically.
+  const sorted = useMemo(() => {
+    const withMsg = people.filter((p) => lastMsg[p.id]);
+    const without = people.filter((p) => !lastMsg[p.id]);
+    withMsg.sort((a, b) => (lastMsg[b.id]?.created_at ?? "").localeCompare(lastMsg[a.id]?.created_at ?? ""));
+    return [...withMsg, ...without];
+  }, [people, lastMsg]);
+  const filtered = useMemo(
+    () => sorted.filter((p) => p.full_name.toLowerCase().includes(q.toLowerCase())),
+    [sorted, q]
+  );
+
+  const sameDept = (p: Person) =>
+    !!profile?.department && p.department === profile.department;
+  const canMessage = active ? (sameDept(active) && (canManage || myDeptChatOn)) : false;
+
+  if (!canManage && !myDeptChatOn) {
+    return (
+      <div className="max-w-md mx-auto mt-20 text-center glass-strong rounded-2xl p-8">
+        <BellOff className="h-10 w-10 mx-auto text-muted-foreground" />
+        <h1 className="text-2xl font-bold mt-3">Chat is turned off</h1>
+        <p className="text-sm text-muted-foreground mt-2">
+          Your department's chat has been disabled by a manager. Please check back later.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-end justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Chat</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Private 1-on-1 messages within your department · Auto-deleted after 10 days
+          </p>
+        </div>
+        {notifPerm !== "granted" && (
+          <Button onClick={requestNotif} variant="outline" size="sm">
+            <Bell className="h-4 w-4 mr-2" />
+            {notifPerm === "denied" ? "Notifications blocked" : "Enable desktop notifications"}
+          </Button>
+        )}
+      </div>
+      <Card className="glass-strong overflow-hidden grid grid-cols-[320px_1fr] h-[calc(100vh-220px)] min-h-[520px]">
+        {/* Sidebar */}
+        <aside className="border-r border-border flex flex-col min-h-0 overflow-hidden">
+          <div className="p-3 border-b border-border space-y-2 shrink-0">
+            <div className="flex items-center justify-between px-1">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Chats
+              </p>
+              {profile?.department && (
+                <Badge variant="secondary" className="text-[10px]">{profile.department}</Badge>
+              )}
+            </div>
+            <div className="relative">
+              <Search className="h-4 w-4 absolute left-2.5 top-2.5 text-muted-foreground" />
+              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search people" className="pl-8" />
+            </div>
+          </div>
+          <ScrollArea className="flex-1 min-h-0">
+            <ul className="py-1">
+              {filtered.map((p) => {
+                const last = lastMsg[p.id];
+                const mineLast = last && last.sender_id === user?.id;
+                const preview = last?.content ?? (sameDept(p) ? "Say hi 👋" : "Different department");
+                return (
+                  <li key={p.id}>
+                    <button
+                      onClick={() => setActive(p)}
+                      className={cn(
+                        "w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-accent/40 transition-colors",
+                        active?.id === p.id && "bg-accent/60"
+                      )}
+                    >
+                      <Avatar className="h-11 w-11">
+                        <AvatarImage src={p.profile_image ?? undefined} />
+                        <AvatarFallback className="gradient-primary text-primary-foreground text-xs">
+                          {p.full_name.split(" ").map((n) => n[0]).slice(0, 2).join("")}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-medium truncate">{p.full_name}</p>
+                          {last && (
+                            <span className="text-[10px] text-muted-foreground shrink-0">
+                              {formatWhen(last.created_at)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between gap-2 mt-0.5">
+                          <p className={cn(
+                            "text-xs truncate flex items-center gap-1",
+                            unread[p.id] > 0 ? "text-foreground font-medium" : "text-muted-foreground"
+                          )}>
+                            {mineLast && (
+                              last?.read_at
+                                ? <CheckCheck className="h-3 w-3 text-primary shrink-0" />
+                                : last?.delivered_at
+                                  ? <CheckCheck className="h-3 w-3 shrink-0 opacity-60" />
+                                  : <Check className="h-3 w-3 shrink-0 opacity-60" />
+                            )}
+                            <span className="truncate">{preview}</span>
+                          </p>
+                          {unread[p.id] > 0 && (
+                            <Badge className="gradient-primary text-primary-foreground border-0 h-5 min-w-5 px-1.5 text-[10px]">
+                              {unread[p.id]}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+              {filtered.length === 0 && (
+                <p className="text-sm text-muted-foreground p-4 text-center">No people found</p>
+              )}
+            </ul>
+          </ScrollArea>
+        </aside>
+
+        {/* Conversation */}
+        <section className="flex flex-col min-w-0 min-h-0 overflow-hidden">
+          {!active ? (
+            <div className="flex-1 grid place-items-center text-center text-muted-foreground">
+              <div>
+                <MessageCircle className="h-10 w-10 mx-auto opacity-50" />
+                <p className="mt-3 text-sm">Pick someone to start chatting</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <header className="px-4 py-3 border-b border-border flex items-center gap-3 sticky top-0 z-10 bg-card/95 backdrop-blur">
+                <Avatar className="h-9 w-9">
+                  <AvatarImage src={active.profile_image ?? undefined} />
+                  <AvatarFallback className="gradient-primary text-primary-foreground text-xs">
+                    {active.full_name.split(" ").map((n) => n[0]).slice(0, 2).join("")}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium leading-tight">{active.full_name}</p>
+                  <p className="text-xs text-muted-foreground">{active.department ?? "—"}</p>
+                </div>
+              </header>
+              <ScrollArea className="flex-1 px-4 py-4 bg-gradient-to-b from-transparent to-accent/10">
+                <div className="space-y-2">
+                  {messages.map((m, i) => {
+                    const mine = m.sender_id === user?.id;
+                    const prev = messages[i - 1];
+                    const showDate = !prev || new Date(prev.created_at).toDateString() !== new Date(m.created_at).toDateString();
+                    return (
+                      <div key={m.id}>
+                        {showDate && (
+                          <div className="flex justify-center my-3">
+                            <span className="text-[11px] font-medium text-muted-foreground bg-muted/60 rounded-full px-3 py-1">
+                              {dayLabel(m.created_at)}
+                            </span>
+                          </div>
+                        )}
+                      <motion.div
+                        initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                        className={cn("flex", mine ? "justify-end" : "justify-start")}
+                      >
+                        <div className={cn(
+                          "max-w-[75%] rounded-2xl px-3.5 py-2 text-sm shadow-sm",
+                          mine ? "gradient-primary text-primary-foreground rounded-br-sm" : "bg-accent/60 rounded-bl-sm"
+                        )}>
+                          <p className="whitespace-pre-wrap break-words">{m.content}</p>
+                          <p className={cn(
+                            "text-[10px] mt-1 opacity-70 flex items-center gap-1",
+                            mine ? "justify-end" : ""
+                          )}>
+                            <span>{new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                            {mine && (m.read_at
+                              ? <CheckCheck className="h-3 w-3" />
+                              : m.delivered_at
+                                ? <CheckCheck className="h-3 w-3 opacity-60" />
+                                : <Check className="h-3 w-3 opacity-60" />
+                            )}
+                          </p>
+                        </div>
+                      </motion.div>
+                      </div>
+                    );
+                  })}
+                  {messages.length === 0 && (
+                    <p className="text-center text-xs text-muted-foreground py-8">
+                      No messages yet. Start the conversation.
+                    </p>
+                  )}
+                  <div ref={endRef} />
+                </div>
+              </ScrollArea>
+              {canMessage ? (
+                <form
+                  onSubmit={(e) => { e.preventDefault(); send(); }}
+                  className="border-t border-border p-3 flex items-center gap-2"
+                >
+                  <Input
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    placeholder="Type a message…"
+                    autoFocus
+                  />
+                  <Button
+                    type="submit"
+                    className="gradient-primary text-primary-foreground border-0"
+                    disabled={!draft.trim()}
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </form>
+              ) : (
+                <div className="border-t border-border p-3 text-center text-xs text-muted-foreground">
+                  You can only message people in your own department.
+                </div>
+              )}
+            </>
+          )}
+        </section>
+      </Card>
+    </div>
+  );
+}
