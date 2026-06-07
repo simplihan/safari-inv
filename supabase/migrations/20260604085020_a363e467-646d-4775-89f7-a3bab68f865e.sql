@@ -1,1 +1,0 @@
-ALTER TABLE public.departments ADD COLUMN IF NOT EXISTS monthly_report_email boolean NOT NULL DEFAULT true;

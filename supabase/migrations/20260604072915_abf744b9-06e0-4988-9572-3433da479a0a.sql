@@ -1,1 +1,0 @@
-REVOKE EXECUTE ON FUNCTION public.auto_close_stale_breaks() FROM PUBLIC, anon, authenticated;
